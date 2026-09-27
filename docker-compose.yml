@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: governance
+      POSTGRES_PASSWORD: governance
+      POSTGRES_DB: governance
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  governance_api:
+    build:
+      context: .
+      dockerfile: governance_api/Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: postgresql+psycopg2://governance:governance@postgres:5432/governance
+      RECEIPT_SIGNING_SECRET: change-me-before-the-demo
+    depends_on:
+      - postgres
+
+  proxy:
+    build:
+      context: .
+      dockerfile: proxy/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      GOVERNANCE_API_URL: http://governance_api:8001
+      UPSTREAM_LLM_BASE_URL: https://api.openai.com/v1
+      UPSTREAM_LLM_API_KEY: ${UPSTREAM_LLM_API_KEY}
+    depends_on:
+      - governance_api
+
+  dashboard:
+    image: python:3.12-slim
+    working_dir: /app/dashboard
+    volumes:
+      - ./dashboard:/app/dashboard
+    command: python -m http.server 8080
+    ports:
+      - "8080:8080"
+
+volumes:
+  pg_data:

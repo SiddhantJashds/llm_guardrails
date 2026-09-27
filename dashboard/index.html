@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Session Dashboard — Governance Runtime</title>
+  <link rel="stylesheet" href="static/css/style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="page">
+    <h1>Governance Dashboard</h1>
+    <p class="subtitle">Live authority score trend, compliance violations, and denied tool calls — per agent_id.</p>
+
+    <nav class="tabs">
+      <a class="active" href="index.html">Session view</a>
+      <a href="user.html">Per-user view</a>
+      <a href="admin.html">Admin</a>
+    </nav>
+
+    <div class="filter-row">
+      <input id="session-id-input" type="text" placeholder="session_id (e.g. sess_abc123)" />
+      <button id="load-session-btn">Load</button>
+    </div>
+
+    <div class="card">
+      <h2>Authority score trend (per agent_id)</h2>
+      <canvas id="trust-trend-chart" height="90"></canvas>
+    </div>
+
+    <div class="card">
+      <h2>Compliance violations</h2>
+      <div id="violations-list" class="empty-state">Load a session to see violations.</div>
+    </div>
+
+    <div class="card">
+      <h2>Denied tool calls</h2>
+      <div id="denied-calls-list" class="empty-state">Load a session to see denied calls.</div>
+    </div>
+  </div>
+
+  <script src="static/js/api.js"></script>
+  <script src="static/js/session_dashboard.js"></script>
+</body>
+</html>

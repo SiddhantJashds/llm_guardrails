@@ -1,0 +1,10 @@
+# Per-tool authority thresholds. Admin-editable at runtime via
+# PUT /admin/tool-thresholds/{tool_id} -- this file only seeds initial values
+# (scripts/init_db.py). Editing this file after the DB is seeded has no
+# effect; use the admin API/page instead.
+thresholds:
+  sql_query_tool: 75.0
+  drive_read_tool: 50.0
+  drive_write_tool: 80.0
+  email_send_tool: 90.0
+default_threshold: 60.0

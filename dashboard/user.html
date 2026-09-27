@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Per-User Dashboard — Governance Runtime</title>
+  <link rel="stylesheet" href="static/css/style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="page">
+    <h1>Governance Dashboard</h1>
+    <p class="subtitle">Per-user token usage, composite trust rating, and violation history.</p>
+
+    <nav class="tabs">
+      <a href="index.html">Session view</a>
+      <a class="active" href="user.html">Per-user view</a>
+      <a href="admin.html">Admin</a>
+    </nav>
+
+    <div class="filter-row">
+      <input id="user-id-input" type="text" placeholder="user_id" />
+      <button id="load-user-btn">Load</button>
+    </div>
+
+    <div class="card">
+      <h2>Profile</h2>
+      <div class="stat-row">
+        <div class="stat-tile"><div class="value" id="tile-tokens-in">—</div><div class="label">Tokens in</div></div>
+        <div class="stat-tile"><div class="value" id="tile-tokens-out">—</div><div class="label">Tokens out</div></div>
+        <div class="stat-tile"><div class="value" id="tile-rating">—</div><div class="label">Composite rating</div></div>
+        <div class="stat-tile"><div class="value" id="tile-violations">—</div><div class="label">Violations</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Token usage</h2>
+      <canvas id="token-usage-chart" height="90"></canvas>
+    </div>
+
+    <div class="card">
+      <h2>Recent decisions</h2>
+      <div id="decision-history-list" class="empty-state">Load a user to see decision history.</div>
+    </div>
+  </div>
+
+  <script src="static/js/api.js"></script>
+  <script src="static/js/user_dashboard.js"></script>
+</body>
+</html>

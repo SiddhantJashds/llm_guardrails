@@ -1,0 +1,19 @@
+# DPDP (India) pack -- general personal-data identifiers, distinct from
+# HIPAA's healthcare focus. TODO (Data Scientist): finalize identifier list
+# and actions; this is a starting placeholder.
+pack_id: dpdp
+identifiers:
+  - name: full_name
+    action: redact
+  - name: phone_number
+    action: redact
+  - name: email_address
+    action: redact
+  - name: residential_address
+    action: redact
+  - name: aadhaar_like # Indian national ID pattern
+    action: block
+  - name: pan_like # Indian tax ID pattern
+    action: hash
+  - name: consent_purpose_flag # DPDP-specific: purpose-limitation marker, not a raw identifier
+    action: log_only

@@ -1,0 +1,4 @@
+# Everything needed to run the full test suite (`pytest` from the repo root).
+-r governance_api/requirements.txt
+-r detectors/requirements.txt
+httpx>=0.27

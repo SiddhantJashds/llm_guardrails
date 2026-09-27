@@ -1,0 +1,18 @@
+# HIPAA <-> DPDP identifier overlap (docs/HACKATHON_PLAN.md, Data Scientist Day2 #5).
+# `shared` identifiers should use the SAME detector function under both packs
+# so they aren't implemented twice; `pack_specific` are unique to one regime.
+shared:
+  - full_name
+  - phone_number
+  - email_address
+  - address # HIPAA's geographic_subdivision <-> DPDP's residential_address
+pack_specific:
+  hipaa:
+    - ssn_like
+    - medical_record_number
+    - date_except_year
+    - fax_number
+  dpdp:
+    - aadhaar_like
+    - pan_like
+    - consent_purpose_flag

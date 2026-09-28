@@ -18,6 +18,7 @@ from shared.schemas import (  # noqa: E402
     HandoffCheckResponse,
 )
 
+from detectors.scoring.signals import phi_signal  # noqa: E402
 from access_control.overrides import is_unredacted_allowed
 from authority.engine import AuthorityEngine
 from authority.policy_gates import required_threshold
@@ -35,7 +36,7 @@ def compliance_check(req: ComplianceCheckRequest, db: Session = Depends(get_db))
     if violations:
         engine = AuthorityEngine(db)
         engine.get_or_create(req.identity.agent_id, req.identity.session_id, req.identity.parent_agent_id)
-        engine.apply_signal(req.identity.agent_id, "phi_in_output")
+        engine.apply_signal(req.identity.agent_id, phi_signal(violations))
 
     reason = ", ".join(violations) if violations else None
     if violations and allow_unredacted:
@@ -94,7 +95,7 @@ def handoff_check(req: HandoffCheckRequest, db: Session = Depends(get_db)):
     engine.get_or_create(req.identity.agent_id, req.identity.session_id, req.identity.parent_agent_id)
 
     if violations:
-        engine.apply_signal(req.identity.agent_id, "phi_in_output")
+        engine.apply_signal(req.identity.agent_id, phi_signal(violations))
 
     # TODO (SWE#2 Day2 #7): roll up multiple agents' scores in a session so
     # the FINAL output can be blocked even if no single agent alone breaches

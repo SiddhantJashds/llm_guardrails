@@ -21,3 +21,4 @@ If you're not sure whether something rises to that bar, ask — or use the `deci
 | [0005](0005-user-identity-no-auth.md) | No auth/RBAC/user creation; per-user_id override table instead | Accepted |
 | [0006](0006-shared-progress-file.md) | Shared `docs/PROGRESS.md` over per-developer local progress files | Accepted |
 | [0007](0007-tests-and-ci-before-handoff.md) | Automated tests + CI as a readiness gate before handoff | Accepted |
+| [0008](0008-ner-low-confidence-tier.md) | NER-derived detections are a low-confidence tier (small penalty, never block) | Accepted |

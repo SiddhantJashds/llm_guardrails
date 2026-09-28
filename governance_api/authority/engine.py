@@ -18,6 +18,7 @@ DEFAULT_SCORE = 100.0
 # signal name -> score penalty.
 SIGNAL_PENALTIES = {
     "phi_in_output": 20.0,
+    "phi_in_output_low_confidence": 5.0,
     "tool_out_of_scope": 15.0,
     "repeated_denied_call": 10.0,
     "prompt_injection_detected": 25.0,

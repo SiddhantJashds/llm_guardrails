@@ -1,11 +1,10 @@
 """Compliance engine action branching + the redact-by-default override rule
 (docs/adr/0003-redact-by-default.md).
 
-`_run_detectors` is monkeypatched here because real detector wiring is still
-a TODO owned by the Data Scientist (see docs/MOCKED_VS_PRODUCTION.md and
-test_api_routes.py's xfail test that tracks exactly that gap) -- these tests
-verify the engine's OWN logic (action lookup, override gating) independent of
-which detector implementation eventually plugs in.
+`_run_detectors` is monkeypatched here so these tests verify the engine's OWN
+logic (action lookup, override gating, the low-confidence block downgrade)
+independent of what any detector returns -- end-to-end detector coverage
+lives in detectors/tests/ and test_api_routes.py.
 """
 import compliance.engine as compliance_engine
 from shared.models import CompliancePackConfig
@@ -70,3 +69,15 @@ def test_no_violations_is_a_clean_allow(db_session, monkeypatch):
     assert verdict == "allow"
     assert cleaned == "nothing sensitive here"
     assert violations == []
+
+
+def test_block_is_downgraded_to_redact_for_low_confidence_identifiers(db_session, monkeypatch):
+    # An admin (mis)configuring NER-derived `full_name` to "block" must not let
+    # a statistical false positive wipe the whole response (docs/adr/0008).
+    _seed_action(db_session, "hipaa", "full_name", "block")
+    monkeypatch.setattr(compliance_engine, "_run_detectors", lambda text, pack_id: [("full_name", "Jane Roe")])
+
+    verdict, cleaned, violations = compliance_engine.check(db_session, "Seen by Jane Roe today", "hipaa")
+    assert verdict == "redact"
+    assert cleaned == "Seen by [REDACTED] today"
+    assert violations == ["full_name"]

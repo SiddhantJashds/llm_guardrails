@@ -13,9 +13,11 @@ from fastapi.middleware.cors import CORSMiddleware
 sys.path.append(str(Path(__file__).resolve().parents[1]))  # allow `import shared`
 from shared.db import Base, engine  # noqa: E402
 
+from detectors import ner  # noqa: E402
 from routes import governance, dashboard, admin  # noqa: E402
 
 Base.metadata.create_all(bind=engine)
+ner.load_model()  # fail-closed: refuse to start without the NER model (or GUARDRAILS_NER_DISABLED=1)
 
 app = FastAPI(title="governance-api")
 

@@ -19,20 +19,35 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))  # allow `import detec
 from sqlalchemy.orm import Session
 
 from shared.models import CompliancePackConfig
+from detectors.scoring.signals import LOW_CONFIDENCE_IDENTIFIERS
 
 from . import actions
 
 Verdict = str  # "allow" | "redact" | "block" | "hash" | "log_only"
 
 
-def _run_detectors(text: str, pack_id: str) -> List[Tuple[str, str]]:
-    """Return [(identifier_name, matched_span), ...] found in `text`.
+_HIPAA_DETECTOR = None
+_DPDP_DETECTOR = None
 
-    TODO (Data Scientist): wire in the real detectors, e.g.:
-        from detectors.hipaa.identifiers import find_all as find_hipaa
-        from detectors.dpdp.identifiers import find_all as find_dpdp
-    """
-    return []
+
+def _get_detector(pack_id: str):
+    """Lazy-import the correct detector for the requested pack."""
+    global _HIPAA_DETECTOR, _DPDP_DETECTOR
+    if _HIPAA_DETECTOR is None:
+        from detectors.hipaa.identifiers import find_all as _hipaa_find_all
+        _HIPAA_DETECTOR = _hipaa_find_all
+    if _DPDP_DETECTOR is None:
+        from detectors.dpdp.identifiers import find_all as _dpdp_find_all
+        _DPDP_DETECTOR = _dpdp_find_all
+    return {"hipaa": _HIPAA_DETECTOR, "dpdp": _DPDP_DETECTOR}.get(pack_id)
+
+
+def _run_detectors(text: str, pack_id: str) -> List[Tuple[str, str]]:
+    """Return [(identifier_name, matched_span), ...] found in `text`."""
+    detector = _get_detector(pack_id)
+    if detector is None:
+        return []
+    return detector(text)
 
 
 def _action_for(db: Session, pack_id: str, identifier: str) -> str:
@@ -49,6 +64,10 @@ def check(db: Session, text: str, pack_id: str, allow_unredacted: bool = False) 
     verdict: Verdict = "log_only"
     for identifier, span in violations:
         action = _action_for(db, pack_id, identifier)
+        if action == "block" and identifier in LOW_CONFIDENCE_IDENTIFIERS:
+            # A statistical hit must never kill the whole response (nor, via an
+            # admin misconfig, turn a false positive into a hard denial).
+            action = "redact"
 
         if action == "block":
             # block is never overridable by allow_unredacted.

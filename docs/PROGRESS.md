@@ -6,7 +6,7 @@ Legend: `[ ]` not started · `[~]` scaffolded (file/wiring exists, real logic st
 
 Before marking anything `[x]` that touches `shared/`, `authority/`, `compliance/`, `access_control/`, or a route: run `pytest` from the repo root ([docs/adr/0007](adr/0007-tests-and-ci-before-handoff.md)). It also runs automatically in CI on every push/PR.
 
-Last updated: 2026-09-28 (initial scaffold pass + test suite/CI added — see git history / ADRs for what changed since).
+Last updated: 2026-09-28 (Data Scientist Day 1 #1/#4 done: detectors wired into compliance engine incl. NER names/places; NER hits are a low-confidence tier — see adr/0008).
 
 ## SWE #1 — Gateway & Integration Engineer
 
@@ -60,13 +60,13 @@ Last updated: 2026-09-28 (initial scaffold pass + test suite/CI added — see gi
 ## Data Scientist — Compliance Detection & Scoring Logic
 
 **Day 1**
-- [~] 1. HIPAA pack v1 detectors — regex identifiers implemented + unit-tested (`detectors/tests/test_detectors.py`, 6/6 passing); `full_name`/`geographic_subdivision` have no detector at all yet (need NER)
+- [x] 1. HIPAA pack v1 detectors — 16 identifier classes via regex (`detectors/hipaa/identifiers.py`) + `full_name`/`geographic_subdivision` via pinned spaCy NER (`detectors/ner.py`, low-confidence tier, [docs/adr/0008](adr/0008-ner-low-confidence-tier.md)); unit-tested (`detectors/tests/`). `biometric`/`full_face` still need image analysis; known NER gaps in MOCKED_VS_PRODUCTION.md
 - [x] 2. Four compliance actions (redact/block/hash/log_only) implemented, including the redact-by-default override logic ([docs/adr/0003](adr/0003-redact-by-default.md))
 - [x] 3. Signal→penalty table (`detectors/scoring/signals.py`) handed to the Authority Engine
-- [ ] 4. **End-of-day-1 blocker: detectors are not called from `governance_api/compliance/engine.py` yet** (`_run_detectors` returns `[]` — see its TODO). Wiring this in is what actually closes the Day-1 MVP loop end to end. A test already exists and is marked `xfail(strict=True)` for exactly this gap: `governance_api/tests/test_api_routes.py::test_compliance_check_actually_catches_phi_once_detectors_are_wired` — once you wire the detectors in, remove that marker; CI will fail (XPASS) if you forget.
+- [x] 4. **End-of-day-1 blocker: detectors are not called from `governance_api/compliance/engine.py` yet** (`_run_detectors` returns `[]` — see its TODO). Wiring this in is what actually closes the Day-1 MVP loop end to end. A test already exists and is marked `xfail(strict=True)` for exactly this gap: `governance_api/tests/test_api_routes.py::test_compliance_check_actually_catches_phi_once_detectors_are_wired` — once you wire the detectors in, remove that marker; CI will fail (XPASS) if you forget.
 
 **Day 2**
-- [~] 5. DPDP pack detectors — phone/email/aadhaar/pan regex implemented + unit-tested; overlap map done; `residential_address` needs NER same as HIPAA's name/address gap
+- [~] 5. DPDP pack detectors — phone/email/aadhaar/pan regex + NER `full_name` and place-level `residential_address` (low-confidence tier); overlap map done; street-address detection still missing
 - [~] 6. Composite trust rating / effective-use score — placeholder linear formulas in `user_profile_job.py`, need real formulas from you
 - [x] 7. Prompt-injection heuristics (`detectors/injection/heuristics.py`) — instruction-override + forged-identity patterns, Unicode-normalization evasion handling, unit-tested
 - [ ] 8. Validate against demo script's 3 scenarios + adversarial injection case per pack

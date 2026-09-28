@@ -104,16 +104,6 @@ def test_dashboard_user_view_reflects_written_receipts(client):
     assert len(body["recent_decisions"]) == 1
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Detectors aren't wired into compliance/engine.py yet (see its "
-        "_run_detectors TODO and docs/MOCKED_VS_PRODUCTION.md). This SHOULD "
-        "start passing once the Data Scientist wires detectors.hipaa.identifiers "
-        "in -- when it does, remove this xfail marker and check the item off "
-        "in docs/PROGRESS.md (Data Scientist, Day 1, item 4)."
-    ),
-)
 def test_compliance_check_actually_catches_phi_once_detectors_are_wired(client):
     resp = client.post(
         "/governance/compliance-check",
@@ -127,3 +117,28 @@ def test_compliance_check_actually_catches_phi_once_detectors_are_wired(client):
     body = resp.json()
     assert body["verdict"] != "allow"
     assert "555-123-4567" not in body["cleaned_text"]
+
+
+def _score_after(client, text, agent_id):
+    identity = make_identity(agent_id=agent_id)
+    client.post(
+        "/governance/compliance-check",
+        json={"identity": identity, "direction": "outbound", "text": text, "pack_id": "hipaa"},
+    )
+    return client.post("/governance/tool-check", json={"identity": identity, "tool_id": "sql_query_tool"}).json()[
+        "current_score"
+    ]
+
+
+def test_ner_only_hit_costs_a_small_penalty_but_a_regex_hit_costs_the_full_one(client):
+    assert _score_after(client, "Patient Jane Roe was seen in Boston.", "ner_only_agent") == 95.0
+    assert _score_after(client, "SSN: 123-45-6789", "regex_agent") == 80.0
+
+
+def test_authority_penalty_tables_stay_in_sync():
+    # authority/engine.py keeps its own copy of the table the Data Scientist owns
+    # in detectors/scoring/signals.py -- fail loudly if they drift apart.
+    from authority.engine import SIGNAL_PENALTIES as engine_table
+    from detectors.scoring.signals import SIGNAL_PENALTIES as owner_table
+
+    assert engine_table == owner_table

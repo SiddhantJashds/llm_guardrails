@@ -1,9 +1,18 @@
-# HIPAA pack v1 -- ~8-10 high-signal identifiers (scoped per non-goals, not
-# full Safe Harbor coverage). Loaded into CompliancePackConfig by
-# scripts/init_db.py; detectors/hipaa/identifiers.py implements the matching.
+# HIPAA Safe Harbor pack -- all 18 identifier classes from 45 CFR 164.514(b)(2).
+# Loaded into CompliancePackConfig by scripts/init_db.py; detectors/hipaa/identifiers.py
+# implements the matching. full_name / geographic_subdivision come from a pinned spaCy
+# NER model (detectors/ner.py) and are a LOW-CONFIDENCE tier: keep them at redact or
+# log_only -- the engine downgrades `block` to `redact` for them (docs/adr/0008).
+# biometric_identifier is a keyword regex only; full_face needs image analysis.
 pack_id: hipaa
 identifiers:
+  # --- NER-derived, low-confidence tier (docs/adr/0008) ---
   - name: full_name
+    action: redact
+  - name: geographic_subdivision
+    action: redact
+  # --- Regex-detectable identifiers (all working) ---
+  - name: date_except_year
     action: redact
   - name: phone_number
     action: redact
@@ -11,11 +20,26 @@ identifiers:
     action: redact
   - name: email_address
     action: redact
-  - name: geographic_subdivision # smaller than state: street, city, zip
-    action: redact
-  - name: date_except_year # DOB, admission/discharge dates, etc.
-    action: redact
   - name: ssn_like
     action: block
   - name: medical_record_number
     action: hash
+  - name: health_plan_beneficiary_number
+    action: redact
+  - name: account_number
+    action: redact
+  - name: certificate_license_number
+    action: redact
+  - name: vehicle_identifier
+    action: redact
+  - name: device_identifier
+    action: hash
+  - name: web_url
+    action: redact
+  - name: ip_address
+    action: redact
+  - name: biometric_identifier
+    action: block
+  - name: unique_identifying_code
+    action: redact
+  # full_face is tracked but not yet detectable (requires image analysis)

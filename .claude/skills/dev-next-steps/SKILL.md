@@ -11,11 +11,11 @@ Four people are building this in two days from `docs/HACKATHON_PLAN.md`. The fai
 
 ### 1. Get oriented: which role
 
-If the developer's role isn't already obvious from the conversation, ask via AskUserQuestion, offering exactly the four roles from `docs/HACKATHON_PLAN.md`:
-- SWE #1 -- Gateway & Integration Engineer
-- SWE #2 -- Authority Engine & Dashboard Engineer
-- Data Engineer -- Ledger, Pipeline & Storage
-- Data Scientist -- Compliance Detection & Scoring Logic
+If the developer's role isn't already obvious from the conversation, ask via AskUserQuestion, offering exactly the four roles from `docs/HACKATHON_PLAN.md`'s "Team & Role Split" table (names included there -- keep this skill's own copy in sync if that table changes):
+- SWE #1 (Sauda) -- Gateway & Integration Engineer
+- SWE #2 (Harsh) -- Authority Engine & Dashboard Engineer
+- Data Engineer (Somu) -- Ledger, Pipeline & Storage
+- Data Scientist (Siddhant) -- Compliance Detection & Scoring Logic
 
 ### 2. Find where they are
 
@@ -31,7 +31,7 @@ The first item that isn't `[x]` is the current task -- including a `[~]` item, s
 Give them enough to start, not the whole remaining list:
 - What the task is, in their role's terms -- pull this from `docs/PROGRESS.md`'s item text and the matching step in `docs/HACKATHON_PLAN.md`'s per-role section (the plan doc has more build context than the checklist line does).
 - Which file(s) it lives in (`docs/PROGRESS.md`'s items already name these).
-- Anything it depends on that isn't done yet -- e.g. if their task needs another role's still-unchecked item, say so plainly rather than letting them discover it mid-work.
+- Anything it depends on that isn't done yet -- e.g. if their task needs another role's still-unchecked item, say so plainly rather than letting them discover it mid-work. **Name the specific person who owns that blocking item** (see the name mapping in step 1) and tell the developer to go connect with them *now*, before or while starting -- not after they've already run into the wall. The whole point of surfacing a blocker in advance is to let the two of them sort it out (sequence the work, swap who does what, or just get a heads-up on timing) while there's still time saved by doing so, rather than the developer discovering it mid-task and losing that time anyway.
 
 Then stop and let them go work. Don't preview the next two or three tasks after this one -- that's what makes this "one small chunk at a time" instead of "here's your whole sprint printed out."
 

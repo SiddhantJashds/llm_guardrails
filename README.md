@@ -30,12 +30,12 @@ Runs automatically on every push/PR via `.github/workflows/tests.yml`. One test 
 
 ```
 shared/            DB connection, ORM models, identity envelope, API schemas -- used by both services
-governance_sdk/    pip-installable client: GovernanceClient, @governed_tool, @governed_node, LangChain/LangGraph integrations   [SWE #1]
-proxy/             OpenAI-compatible reverse proxy (single-LLM-call integration point)                                          [SWE #1]
-governance_api/    Authority engine, compliance engine, receipt writer, /governance/* and /dashboard/* REST API                 [SWE #2]
-dashboard/         Static HTML/JS/CSS dashboard (session view + per-user view), no build step                                    [SWE #2]
-data_pipeline/     Ledger chain verification, token-usage ingestion, user-profile aggregation, compliance pack config, benchmarking [Data Engineer]
-detectors/         HIPAA/DPDP identifier detectors, prompt-injection heuristics, trust-score signal table                        [Data Scientist]
+governance_sdk/    pip-installable client: GovernanceClient, @governed_tool, @governed_node, LangChain/LangGraph integrations   [SWE #1 -- Sauda]
+proxy/             OpenAI-compatible reverse proxy (single-LLM-call integration point)                                          [SWE #1 -- Sauda]
+governance_api/    Authority engine, compliance engine, receipt writer, /governance/* and /dashboard/* REST API                 [SWE #2 -- Harsh]
+dashboard/         Static HTML/JS/CSS dashboard (session view + per-user view), no build step                                    [SWE #2 -- Harsh]
+data_pipeline/     Ledger chain verification, token-usage ingestion, user-profile aggregation, compliance pack config, benchmarking [Data Engineer -- Somu]
+detectors/         HIPAA/DPDP identifier detectors, prompt-injection heuristics, trust-score signal table                        [Data Scientist -- Siddhant]
 examples/          The four reference agents (chat, RAG, LangChain single-agent, LangGraph multi-agent) used for cross-team testing
 scripts/           init_db.py -- creates tables + seeds compliance pack config from data_pipeline/config/*.yaml
 ```

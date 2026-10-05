@@ -8,7 +8,7 @@ Before marking anything `[x]` that touches `shared/`, `authority/`, `compliance/
 
 Last updated: 2026-10-05 (SWE#1 Day1 #1/#5/#6 + Day2 #7 done: LangChain/LangGraph integrations actually run against the real API for the first time, not just written — found and fixed a real enforcement bug along the way (BaseCallbackHandler.raise_error defaulting False, see adr/0012). Also: Data Scientist Day 2 #5/#6/#8 done (DPDP pack, real composite-rating/effective-use formulas adr/0011, injection detection wired adr/0010). #9 items (both teams) deferred to end-of-dev, blocked externally.)
 
-## SWE #1 — Gateway & Integration Engineer
+## SWE #1 (Sauda) — Gateway & Integration Engineer
 
 **Day 1**
 - [x] 1. Scaffold `governance_sdk` package with `GovernanceClient` + `@governed_tool` — now exercised against a real running agent ([docs/adr/0012](adr/0012-langchain-langgraph-verified-against-installed-apis.md); `governance_sdk/tests/`)
@@ -25,7 +25,7 @@ Last updated: 2026-10-05 (SWE#1 Day1 #1/#5/#6 + Day2 #7 done: LangChain/LangGrap
 - [~] 10. DPDP pack through the proxy path — pack config seeded; detectors ARE now wired into the engine (this note was stale — see Data Scientist Day1 #4/Day2 #5), so the only remaining blocker is `proxy/main.py` hardcoding `"pack_id": "hipaa"` on both compliance-check calls instead of making it selectable
 - [~] 11. Demo script's three scenarios wired through both single- and multi-agent paths — the MECHANISM is now proven working through both paths (#6/#7 above: tool allow/deny, PHI redaction+scoring, multi-agent handoff all verified for real), but the actual 3 canonical demo-script scenarios (same ones in `governance_api/tests/test_demo_scenarios.py`) haven't been composed into one script run through each path yet
 
-## SWE #2 — Authority Engine & Dashboard Engineer
+## SWE #2 (Harsh) — Authority Engine & Dashboard Engineer
 
 **Day 1**
 - [x] 1. Authority Engine: per-agent score, `get_or_create`, threshold check
@@ -42,7 +42,7 @@ Last updated: 2026-10-05 (SWE#1 Day1 #1/#5/#6 + Day2 #7 done: LangChain/LangGrap
 - [~] 9. Per-user token usage display — dashboard reads `UserProfile`; nothing populates it yet (see Data Engineer Day2 #5)
 - [ ] 10. Demo script attribution check across both paths
 
-## Data Engineer — Ledger, Pipeline & Storage
+## Data Engineer (Somu) — Ledger, Pipeline & Storage
 
 **Day 1**
 - [x] 1. Audit ledger schema + append (via `write_receipt`) + `verify_chain.py` — implemented and smoke-tested (tamper/signature check included)
@@ -57,7 +57,7 @@ Last updated: 2026-10-05 (SWE#1 Day1 #1/#5/#6 + Day2 #7 done: LangChain/LangGrap
 - [ ] 8. Latency/overhead benchmarking — script exists (`benchmark_latency.py`), not yet run against a real upstream LLM
 - [ ] 9. Cross-team schema compatibility check against the other 3 teams' reference agents — **deferred to end-of-dev** (2026-10-05): blocked on those agents existing, nothing to run this against yet; revisit once they're available rather than waiting on them
 
-## Data Scientist — Compliance Detection & Scoring Logic
+## Data Scientist (Siddhant) — Compliance Detection & Scoring Logic
 
 **Day 1**
 - [x] 1. HIPAA pack v1 detectors — 16 identifier classes via regex (`detectors/hipaa/identifiers.py`) + `full_name`/`geographic_subdivision` via pinned spaCy NER (`detectors/ner.py`, low-confidence tier, [docs/adr/0008](adr/0008-ner-low-confidence-tier.md)); unit-tested (`detectors/tests/`). `biometric`/`full_face` still need image analysis; known NER gaps in MOCKED_VS_PRODUCTION.md

@@ -21,10 +21,10 @@ Key takeaways from the kickoff discussion (beyond the written problem statement)
 
 | Person | Role | Primary ownership |
 |---|---|---|
-| SWE #1 | **Gateway & Integration Engineer** | OpenAI-compatible reverse proxy, LangChain callback integration, LangGraph node/tool-call interception, `@governed_tool` decorator, receipt writer (hash-chaining + signing) |
-| SWE #2 | **Authority Engine & Dashboard Engineer** | Trust/authority scoring engine, policy gates, monotonic reduction, delegation capping, governance REST API, dashboard backend + frontend |
-| Data Engineer | **Ledger, Pipeline & Storage** | Receipt/audit ledger storage, token-usage ingestion pipeline, user-profile aggregation, compliance-pack config storage, latency benchmarking harness |
-| Data Scientist | **Compliance Detection & Scoring Logic** | HIPAA pack (~8–10 identifiers) + DPDP pack detectors, redact/block/hash/log-only logic, HIPAA↔DPDP overlap mapping, rule-based trust-score signal design, prompt-injection detection heuristics |
+| SWE #1 — **Sauda** | **Gateway & Integration Engineer** | OpenAI-compatible reverse proxy, LangChain callback integration, LangGraph node/tool-call interception, `@governed_tool` decorator, receipt writer (hash-chaining + signing) |
+| SWE #2 — **Harsh** | **Authority Engine & Dashboard Engineer** | Trust/authority scoring engine, policy gates, monotonic reduction, delegation capping, governance REST API, dashboard backend + frontend |
+| Data Engineer — **Somu** | **Ledger, Pipeline & Storage** | Receipt/audit ledger storage, token-usage ingestion pipeline, user-profile aggregation, compliance-pack config storage, latency benchmarking harness |
+| Data Scientist — **Siddhant** | **Compliance Detection & Scoring Logic** | HIPAA pack (~8–10 identifiers) + DPDP pack detectors, redact/block/hash/log-only logic, HIPAA↔DPDP overlap mapping, rule-based trust-score signal design, prompt-injection detection heuristics |
 
 ## Architecture
 

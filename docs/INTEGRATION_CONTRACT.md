@@ -40,7 +40,9 @@ resp = httpx.post(
 
 That's the entire integration — inbound/outbound compliance checks happen inside the proxy. See `examples/chat_interface.py` and `examples/rag_interface.py`.
 
-For RAG specifically: retrieved document text is just more untrusted input. Concatenate it into the prompt as usual and send the whole thing through the proxy exactly like a chat message — the inbound check treats it identically, and a leaked PHI/PII identifier from a retrieved document gets caught the same way a user-typed one would.
+For RAG specifically: retrieved document text is just more untrusted input. Concatenate it into the prompt as usual and send the whole thing through the proxy exactly like a chat message — the inbound check treats it identically, and a leaked PHI/PII identifier from a retrieved document gets caught the same way a user-typed one would. It's also where prompt-injection detection runs ([docs/adr/0010](adr/0010-wire-injection-detection-into-compliance-routes.md)) — a retrieved document trying "ignore previous instructions" is caught exactly like a user typing it, since both go through the same inbound check with no special-casing by source.
+
+**If you call `/governance/compliance-check` directly** (rather than going through the proxy, which already sets this correctly): `direction` isn't decorative — only `"inbound"` is checked for prompt-injection phrasing (`"outbound"`, the model's own answer, is not). The response also now carries `injection_hits: List[str]` (default `[]`, additive) alongside `violations`.
 
 ### 2. LangChain single-agent
 

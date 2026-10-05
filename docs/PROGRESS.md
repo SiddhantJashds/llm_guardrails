@@ -6,7 +6,7 @@ Legend: `[ ]` not started · `[~]` scaffolded (file/wiring exists, real logic st
 
 Before marking anything `[x]` that touches `shared/`, `authority/`, `compliance/`, `access_control/`, or a route: run `pytest` from the repo root ([docs/adr/0007](adr/0007-tests-and-ci-before-handoff.md)). It also runs automatically in CI on every push/PR.
 
-Last updated: 2026-10-05 (Data Scientist Day 2 #5 done: DPDP pack complete — street/PIN address regex, bare-Indian-mobile recall fix, zero-cost `consent_purpose_flag` heuristic; see adr/0008, adr/0009).
+Last updated: 2026-10-05 (Data Scientist Day 2 #5/#8 done: DPDP pack complete; prompt-injection detection wired into the real API for the first time (adr/0010) and validated against both packs' demo scenarios).
 
 ## SWE #1 — Gateway & Integration Engineer
 
@@ -22,7 +22,7 @@ Last updated: 2026-10-05 (Data Scientist Day 2 #5 done: DPDP pack complete — s
 - [~] 7. LangGraph `@governed_node` wrapping — decorator + helper exist; `wrap_graph_nodes` unverified against installed LangGraph API (see [docs/adr/0002](adr/0002-no-post-model-hook-lock-in.md))
 - [x] 8. Delegation capping — `authority/delegation.py`, enforced in `AuthorityEngine.get_or_create`
 - [x] 9. Fail-closed behavior — `GovernanceClient._post`, proxy's `_fail_closed`
-- [~] 10. DPDP pack through the proxy path — pack config seeded, detectors not yet wired into the engine
+- [~] 10. DPDP pack through the proxy path — pack config seeded; detectors ARE now wired into the engine (this note was stale — see Data Scientist Day1 #4/Day2 #5), so the only remaining blocker is `proxy/main.py` hardcoding `"pack_id": "hipaa"` on both compliance-check calls instead of making it selectable
 - [ ] 11. Demo script's three scenarios wired through both single- and multi-agent paths
 
 ## SWE #2 — Authority Engine & Dashboard Engineer
@@ -68,6 +68,6 @@ Last updated: 2026-10-05 (Data Scientist Day 2 #5 done: DPDP pack complete — s
 **Day 2**
 - [x] 5. DPDP pack detectors — phone/email/aadhaar/pan regex + NER `full_name`/place-level `residential_address` (low-confidence tier) + street-address & labelled-PIN regex + bare-Indian-mobile recall fix + `consent_purpose_flag` heuristic (always zero-cost, [docs/adr/0009](adr/0009-no-signal-identifiers-for-metadata-markers.md)); overlap map done; unit-tested (`detectors/tests/test_dpdp.py`)
 - [~] 6. Composite trust rating / effective-use score — placeholder linear formulas in `user_profile_job.py`, need real formulas from you
-- [x] 7. Prompt-injection heuristics (`detectors/injection/heuristics.py`) — instruction-override + forged-identity patterns, Unicode-normalization evasion handling, unit-tested
-- [ ] 8. Validate against demo script's 3 scenarios + adversarial injection case per pack
-- [ ] 9. Cross-team detector coverage check
+- [x] 7. Prompt-injection heuristics (`detectors/injection/heuristics.py`) — instruction-override + forged-identity patterns, Unicode-normalization evasion handling, unit-tested; **and now actually wired into `compliance-check`/`handoff-check`** ([docs/adr/0010](adr/0010-wire-injection-detection-into-compliance-routes.md)) — the detector existed and passed its own tests since Day 2, but nothing in `governance_api` called it until now, so `prompt_injection_detected` never fired through the real API
+- [x] 8. Validate against demo script's 3 scenarios + adversarial injection case per pack — `governance_api/tests/test_demo_scenarios.py`, both packs, run against the real API (scope note in the file: this covers the governance_api-level pipeline the Data Scientist owns; wiring it through the actual LangChain/LangGraph paths is SWE#1 Day1 #6 / Day2 #7/#11)
+- [ ] 9. Cross-team detector coverage check — blocked on the other three teams' reference agents existing; nothing to run this against yet

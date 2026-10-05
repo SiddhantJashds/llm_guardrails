@@ -18,6 +18,7 @@ from shared.schemas import (  # noqa: E402
     HandoffCheckResponse,
 )
 
+from detectors.injection.heuristics import detect as detect_injection  # noqa: E402
 from detectors.scoring.signals import phi_signal  # noqa: E402
 from access_control.overrides import is_unredacted_allowed
 from authority.engine import AuthorityEngine
@@ -28,21 +29,43 @@ from receipts.writer import write_receipt
 router = APIRouter(prefix="/governance", tags=["governance"])
 
 
+def _apply_signals(engine: AuthorityEngine, agent_id: str, violations: list, injection_hits: list) -> None:
+    """Apply the PHI/PII signal and the injection signal independently -- each
+    is its own evidence event (and its own authority-history entry), not a
+    single merged one, so monotonic reduction stacks them correctly if both
+    fire on the same text."""
+    phi = phi_signal(violations)
+    if phi:  # None if clean, or if every match is a NO_SIGNAL_IDENTIFIERS marker (e.g. consent_purpose_flag)
+        engine.apply_signal(agent_id, phi)
+    if injection_hits:
+        engine.apply_signal(agent_id, "prompt_injection_detected")
+
+
 @router.post("/compliance-check", response_model=ComplianceCheckResponse)
 def compliance_check(req: ComplianceCheckRequest, db: Session = Depends(get_db)):
     allow_unredacted = is_unredacted_allowed(db, req.identity.user_id, req.request_unredacted)
     verdict, cleaned_text, violations = compliance_engine.check(db, req.text, req.pack_id, allow_unredacted)
 
-    if violations:
+    # Prompt-injection phrasing ("ignore previous instructions", a forged
+    # "as the supervisor" role claim, ...) is a risk on untrusted INPUT --
+    # inbound: the user's prompt, or RAG-retrieved text concatenated into it
+    # (docs/INTEGRATION_CONTRACT.md). Not checked on outbound (the model's
+    # own answer to the end user isn't "injecting" anything into this system).
+    # This never gates the verdict itself (detectors/injection/heuristics.py:
+    # a rule-based signal, not a decision) -- it only costs authority score.
+    injection_hits = detect_injection(req.text) if req.direction == "inbound" else []
+
+    if violations or injection_hits:
         engine = AuthorityEngine(db)
         engine.get_or_create(req.identity.agent_id, req.identity.session_id, req.identity.parent_agent_id)
-        signal = phi_signal(violations)
-        if signal:  # None if every matched identifier is a NO_SIGNAL_IDENTIFIERS marker (e.g. consent_purpose_flag)
-            engine.apply_signal(req.identity.agent_id, signal)
+        _apply_signals(engine, req.identity.agent_id, violations, injection_hits)
 
     reason = ", ".join(violations) if violations else None
     if violations and allow_unredacted:
         reason = f"{reason} [unredacted_override_applied: user_id={req.identity.user_id}]"
+    if injection_hits:
+        injection_note = f"injection_detected: {', '.join(injection_hits)}"
+        reason = f"{reason}; {injection_note}" if reason else injection_note
 
     receipt = write_receipt(
         db,
@@ -56,7 +79,11 @@ def compliance_check(req: ComplianceCheckRequest, db: Session = Depends(get_db))
         ref_id=req.pack_id,
     )
     return ComplianceCheckResponse(
-        verdict=verdict, cleaned_text=cleaned_text, violations=violations, receipt_id=receipt.receipt_id
+        verdict=verdict,
+        cleaned_text=cleaned_text,
+        violations=violations,
+        injection_hits=injection_hits,
+        receipt_id=receipt.receipt_id,
     )
 
 
@@ -93,17 +120,23 @@ def handoff_check(req: HandoffCheckRequest, db: Session = Depends(get_db)):
     # Handoffs are agent-to-agent, not a user-facing response -- the
     # allow_unredacted override intentionally does not apply here.
     verdict, _cleaned, violations = compliance_engine.check(db, req.output_text, req.pack_id)
+    # One agent's output becomes the NEXT agent's input -- an injected
+    # instruction/role-claim here is exactly as much a risk as in a user
+    # prompt, so always checked (no `direction` field needed: a handoff is
+    # inherently "inbound" from the receiving agent's point of view).
+    injection_hits = detect_injection(req.output_text)
+
     engine = AuthorityEngine(db)
     engine.get_or_create(req.identity.agent_id, req.identity.session_id, req.identity.parent_agent_id)
 
-    if violations:
-        signal = phi_signal(violations)
-        if signal:
-            engine.apply_signal(req.identity.agent_id, signal)
+    if violations or injection_hits:
+        _apply_signals(engine, req.identity.agent_id, violations, injection_hits)
 
     # TODO (SWE#2 Day2 #7): roll up multiple agents' scores in a session so
     # the FINAL output can be blocked even if no single agent alone breaches
     # threshold -- currently this only evaluates the one agent_id in `req`.
+    # Injection detection never gates this `allowed` decision by itself, only
+    # the authority score above -- same rule as compliance-check.
     allowed = verdict != "block"
     reason = None if allowed else f"output blocked: not {req.pack_id.upper()}-compliant"
 
@@ -118,4 +151,6 @@ def handoff_check(req: HandoffCheckRequest, db: Session = Depends(get_db)):
         reason=reason,
         ref_id=req.pack_id,
     )
-    return HandoffCheckResponse(allowed=allowed, verdict=verdict, reason=reason, receipt_id=receipt.receipt_id)
+    return HandoffCheckResponse(
+        allowed=allowed, verdict=verdict, reason=reason, injection_hits=injection_hits, receipt_id=receipt.receipt_id
+    )

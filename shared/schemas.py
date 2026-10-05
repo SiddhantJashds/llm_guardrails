@@ -31,6 +31,10 @@ class ComplianceCheckResponse(BaseModel):
     verdict: Literal["allow", "redact", "block", "hash", "log_only"]
     cleaned_text: str
     violations: List[str] = []
+    # Prompt-injection heuristic names matched (detectors/injection/heuristics.py),
+    # only checked on direction="inbound" (see governance_api/routes/governance.py).
+    # Additive field, default [] -- existing callers unaffected.
+    injection_hits: List[str] = []
     receipt_id: str
 
 
@@ -57,4 +61,5 @@ class HandoffCheckResponse(BaseModel):
     allowed: bool
     verdict: str
     reason: Optional[str] = None
+    injection_hits: List[str] = []
     receipt_id: str

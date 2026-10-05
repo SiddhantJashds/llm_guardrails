@@ -36,7 +36,9 @@ def compliance_check(req: ComplianceCheckRequest, db: Session = Depends(get_db))
     if violations:
         engine = AuthorityEngine(db)
         engine.get_or_create(req.identity.agent_id, req.identity.session_id, req.identity.parent_agent_id)
-        engine.apply_signal(req.identity.agent_id, phi_signal(violations))
+        signal = phi_signal(violations)
+        if signal:  # None if every matched identifier is a NO_SIGNAL_IDENTIFIERS marker (e.g. consent_purpose_flag)
+            engine.apply_signal(req.identity.agent_id, signal)
 
     reason = ", ".join(violations) if violations else None
     if violations and allow_unredacted:
@@ -95,7 +97,9 @@ def handoff_check(req: HandoffCheckRequest, db: Session = Depends(get_db)):
     engine.get_or_create(req.identity.agent_id, req.identity.session_id, req.identity.parent_agent_id)
 
     if violations:
-        engine.apply_signal(req.identity.agent_id, phi_signal(violations))
+        signal = phi_signal(violations)
+        if signal:
+            engine.apply_signal(req.identity.agent_id, signal)
 
     # TODO (SWE#2 Day2 #7): roll up multiple agents' scores in a session so
     # the FINAL output can be blocked even if no single agent alone breaches

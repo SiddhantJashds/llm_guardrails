@@ -119,11 +119,11 @@ def test_compliance_check_actually_catches_phi_once_detectors_are_wired(client):
     assert "555-123-4567" not in body["cleaned_text"]
 
 
-def _score_after(client, text, agent_id):
+def _score_after(client, text, agent_id, pack_id="hipaa"):
     identity = make_identity(agent_id=agent_id)
     client.post(
         "/governance/compliance-check",
-        json={"identity": identity, "direction": "outbound", "text": text, "pack_id": "hipaa"},
+        json={"identity": identity, "direction": "outbound", "text": text, "pack_id": pack_id},
     )
     return client.post("/governance/tool-check", json={"identity": identity, "tool_id": "sql_query_tool"}).json()[
         "current_score"
@@ -133,6 +133,14 @@ def _score_after(client, text, agent_id):
 def test_ner_only_hit_costs_a_small_penalty_but_a_regex_hit_costs_the_full_one(client):
     assert _score_after(client, "Patient Jane Roe was seen in Boston.", "ner_only_agent") == 95.0
     assert _score_after(client, "SSN: 123-45-6789", "regex_agent") == 80.0
+
+
+def test_consent_purpose_flag_alone_costs_nothing_through_the_real_api(client):
+    assert _score_after(client, "Purpose: Analytics and reporting.", "consent_flag_agent", pack_id="dpdp") == 100.0
+
+
+def test_aadhaar_hit_still_costs_the_full_penalty_through_the_real_api(client):
+    assert _score_after(client, "Aadhaar: 1234 5678 9012", "aadhaar_agent", pack_id="dpdp") == 80.0
 
 
 def test_authority_penalty_tables_stay_in_sync():

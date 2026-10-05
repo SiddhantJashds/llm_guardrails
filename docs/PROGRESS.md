@@ -6,7 +6,7 @@ Legend: `[ ]` not started · `[~]` scaffolded (file/wiring exists, real logic st
 
 Before marking anything `[x]` that touches `shared/`, `authority/`, `compliance/`, `access_control/`, or a route: run `pytest` from the repo root ([docs/adr/0007](adr/0007-tests-and-ci-before-handoff.md)). It also runs automatically in CI on every push/PR.
 
-Last updated: 2026-09-28 (Data Scientist Day 1 #1/#4 done: detectors wired into compliance engine incl. NER names/places; NER hits are a low-confidence tier — see adr/0008).
+Last updated: 2026-10-05 (Data Scientist Day 2 #5 done: DPDP pack complete — street/PIN address regex, bare-Indian-mobile recall fix, zero-cost `consent_purpose_flag` heuristic; see adr/0008, adr/0009).
 
 ## SWE #1 — Gateway & Integration Engineer
 
@@ -66,7 +66,7 @@ Last updated: 2026-09-28 (Data Scientist Day 1 #1/#4 done: detectors wired into 
 - [x] 4. **End-of-day-1 blocker: detectors are not called from `governance_api/compliance/engine.py` yet** (`_run_detectors` returns `[]` — see its TODO). Wiring this in is what actually closes the Day-1 MVP loop end to end. A test already exists and is marked `xfail(strict=True)` for exactly this gap: `governance_api/tests/test_api_routes.py::test_compliance_check_actually_catches_phi_once_detectors_are_wired` — once you wire the detectors in, remove that marker; CI will fail (XPASS) if you forget.
 
 **Day 2**
-- [~] 5. DPDP pack detectors — phone/email/aadhaar/pan regex + NER `full_name` and place-level `residential_address` (low-confidence tier); overlap map done; street-address detection still missing
+- [x] 5. DPDP pack detectors — phone/email/aadhaar/pan regex + NER `full_name`/place-level `residential_address` (low-confidence tier) + street-address & labelled-PIN regex + bare-Indian-mobile recall fix + `consent_purpose_flag` heuristic (always zero-cost, [docs/adr/0009](adr/0009-no-signal-identifiers-for-metadata-markers.md)); overlap map done; unit-tested (`detectors/tests/test_dpdp.py`)
 - [~] 6. Composite trust rating / effective-use score — placeholder linear formulas in `user_profile_job.py`, need real formulas from you
 - [x] 7. Prompt-injection heuristics (`detectors/injection/heuristics.py`) — instruction-override + forged-identity patterns, Unicode-normalization evasion handling, unit-tested
 - [ ] 8. Validate against demo script's 3 scenarios + adversarial injection case per pack

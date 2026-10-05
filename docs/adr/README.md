@@ -22,3 +22,4 @@ If you're not sure whether something rises to that bar, ask — or use the `deci
 | [0006](0006-shared-progress-file.md) | Shared `docs/PROGRESS.md` over per-developer local progress files | Accepted |
 | [0007](0007-tests-and-ci-before-handoff.md) | Automated tests + CI as a readiness gate before handoff | Accepted |
 | [0008](0008-ner-low-confidence-tier.md) | NER-derived detections are a low-confidence tier (small penalty, never block) | Accepted |
+| [0009](0009-no-signal-identifiers-for-metadata-markers.md) | Metadata markers (DPDP's `consent_purpose_flag`) cost the agent nothing | Accepted |

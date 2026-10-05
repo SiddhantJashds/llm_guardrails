@@ -19,16 +19,25 @@ SIGNAL_PENALTIES = {
 # (governance_api/compliance/engine.py). See docs/adr/0008.
 LOW_CONFIDENCE_IDENTIFIERS = frozenset({"full_name", "geographic_subdivision", "residential_address"})
 
+# Identifiers that are metadata markers, not a PHI/PII leak -- their action is
+# always `log_only` ("pass through, just record it", per docs/HACKATHON_PLAN.md
+# Data Scientist Day1 #2), so a hit must not cost the agent anything. Without
+# this, DPDP's `consent_purpose_flag` (a benign "consent obtained for ..."
+# statement) would dock the same -20 as a real leak every time it appeared.
+NO_SIGNAL_IDENTIFIERS = frozenset({"consent_purpose_flag"})
+
 
 def phi_signal(violations: list):
-    """Authority signal for a compliance-check's violation names, or None if clean.
+    """Authority signal for a compliance-check's violation names, or None if clean
+    (or if everything that matched is a NO_SIGNAL_IDENTIFIERS marker).
 
     Full `phi_in_output` if ANY high-confidence identifier matched; the small
     `phi_in_output_low_confidence` if only low-confidence ones did.
     """
-    if not violations:
+    punishable = [v for v in violations if v not in NO_SIGNAL_IDENTIFIERS]
+    if not punishable:
         return None
-    if any(v not in LOW_CONFIDENCE_IDENTIFIERS for v in violations):
+    if any(v not in LOW_CONFIDENCE_IDENTIFIERS for v in punishable):
         return "phi_in_output"
     return "phi_in_output_low_confidence"
 

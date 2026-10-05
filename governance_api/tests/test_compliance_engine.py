@@ -81,3 +81,17 @@ def test_block_is_downgraded_to_redact_for_low_confidence_identifiers(db_session
     assert verdict == "redact"
     assert cleaned == "Seen by [REDACTED] today"
     assert violations == ["full_name"]
+
+
+def test_block_is_downgraded_to_redact_for_no_signal_identifiers(db_session, monkeypatch):
+    # consent_purpose_flag is a loose, log_only-by-design heuristic (not PII) --
+    # an admin misconfiguring it to "block" must not nuke a benign sentence.
+    _seed_action(db_session, "dpdp", "consent_purpose_flag", "block")
+    monkeypatch.setattr(
+        compliance_engine, "_run_detectors", lambda text, pack_id: [("consent_purpose_flag", "Purpose: Analytics")]
+    )
+
+    verdict, cleaned, violations = compliance_engine.check(db_session, "Purpose: Analytics and reporting", "dpdp")
+    assert verdict == "redact"
+    assert "Purpose: Analytics" not in cleaned
+    assert violations == ["consent_purpose_flag"]

@@ -1,19 +1,28 @@
 # DPDP (India) pack -- general personal-data identifiers, distinct from
-# HIPAA's healthcare focus. TODO (Data Scientist): finalize identifier list
-# and actions; this is a starting placeholder.
+# HIPAA's healthcare focus. detectors/dpdp/identifiers.py implements the
+# matching (regex + NER + the overlap_map.yaml-shared detectors).
+# full_name / residential_address are a LOW-CONFIDENCE tier (NER-derived, same
+# as HIPAA's full_name/geographic_subdivision) -- keep them at redact or
+# log_only; the engine downgrades `block` to `redact` for them (docs/adr/0008).
 pack_id: dpdp
 identifiers:
+  # --- NER-derived + street/PIN regex, low-confidence tier (docs/adr/0008) ---
   - name: full_name
     action: redact
+  - name: residential_address
+    action: redact
+  # --- Regex-detectable (shared with HIPAA, see overlap_map.yaml) ---
   - name: phone_number
     action: redact
   - name: email_address
-    action: redact
-  - name: residential_address
     action: redact
   - name: aadhaar_like # Indian national ID pattern
     action: block
   - name: pan_like # Indian tax ID pattern
     action: hash
-  - name: consent_purpose_flag # DPDP-specific: purpose-limitation marker, not a raw identifier
+  # --- DPDP-specific: a consent/purpose statement marker, not PII itself.
+  # Always log_only -- never redact/block -- and the detector-side wiring
+  # makes it cost the agent's authority score nothing even as a violation
+  # name (detectors/scoring/signals.py: NO_SIGNAL_IDENTIFIERS). ---
+  - name: consent_purpose_flag
     action: log_only

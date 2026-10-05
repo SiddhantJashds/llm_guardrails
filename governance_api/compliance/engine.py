@@ -19,7 +19,13 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))  # allow `import detec
 from sqlalchemy.orm import Session
 
 from shared.models import CompliancePackConfig
-from detectors.scoring.signals import LOW_CONFIDENCE_IDENTIFIERS
+from detectors.scoring.signals import LOW_CONFIDENCE_IDENTIFIERS, NO_SIGNAL_IDENTIFIERS
+
+# Identifiers that must never be configurable to `block`: statistical/NER hits
+# (LOW_CONFIDENCE_IDENTIFIERS) and metadata markers that aren't PII at all
+# (NO_SIGNAL_IDENTIFIERS, e.g. DPDP's consent_purpose_flag) -- either one, a
+# false positive must not be able to nuke the whole response (docs/adr/0008).
+_NEVER_BLOCK = LOW_CONFIDENCE_IDENTIFIERS | NO_SIGNAL_IDENTIFIERS
 
 from . import actions
 
@@ -64,7 +70,7 @@ def check(db: Session, text: str, pack_id: str, allow_unredacted: bool = False) 
     verdict: Verdict = "log_only"
     for identifier, span in violations:
         action = _action_for(db, pack_id, identifier)
-        if action == "block" and identifier in LOW_CONFIDENCE_IDENTIFIERS:
+        if action == "block" and identifier in _NEVER_BLOCK:
             # A statistical hit must never kill the whole response (nor, via an
             # admin misconfig, turn a false positive into a hard denial).
             action = "redact"

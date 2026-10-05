@@ -2,3 +2,13 @@
 -r governance_api/requirements.txt
 -r detectors/requirements.txt
 httpx>=0.27
+
+# governance_sdk's integration tests (governance_sdk/tests/) -- deliberately
+# NOT in governance_sdk/pyproject.toml's own dependencies: the SDK's hard
+# dependency is just httpx; LangChain/LangGraph are "integration-only" per
+# governance_sdk/governance_sdk/integrations/langchain_callback.py's own
+# docstring, needed only by whoever integrates against those frameworks (and
+# by this repo's own tests/examples that verify against them).
+langchain>=1.4
+langchain-core>=1.6
+langgraph>=1.2

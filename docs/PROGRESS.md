@@ -6,24 +6,24 @@ Legend: `[ ]` not started · `[~]` scaffolded (file/wiring exists, real logic st
 
 Before marking anything `[x]` that touches `shared/`, `authority/`, `compliance/`, `access_control/`, or a route: run `pytest` from the repo root ([docs/adr/0007](adr/0007-tests-and-ci-before-handoff.md)). It also runs automatically in CI on every push/PR.
 
-Last updated: 2026-10-05 (Data Scientist Day 2 #5/#6/#8 done: DPDP pack complete; real composite-rating/effective-use formulas (adr/0011, unblocks Data Engineer #6); prompt-injection detection wired into the real API for the first time (adr/0010) and validated against both packs' demo scenarios. #9 (both teams) deferred to end-of-dev, blocked externally.)
+Last updated: 2026-10-05 (SWE#1 Day1 #1/#5/#6 + Day2 #7 done: LangChain/LangGraph integrations actually run against the real API for the first time, not just written — found and fixed a real enforcement bug along the way (BaseCallbackHandler.raise_error defaulting False, see adr/0012). Also: Data Scientist Day 2 #5/#6/#8 done (DPDP pack, real composite-rating/effective-use formulas adr/0011, injection detection wired adr/0010). #9 items (both teams) deferred to end-of-dev, blocked externally.)
 
 ## SWE #1 — Gateway & Integration Engineer
 
 **Day 1**
-- [~] 1. Scaffold `governance_sdk` package with `GovernanceClient` + `@governed_tool` — client and decorator exist, not yet used against a real running agent
+- [x] 1. Scaffold `governance_sdk` package with `GovernanceClient` + `@governed_tool` — now exercised against a real running agent ([docs/adr/0012](adr/0012-langchain-langgraph-verified-against-installed-apis.md); `governance_sdk/tests/`)
 - [~] 2. OpenAI-compatible reverse proxy (`proxy/main.py`) — accepts requests, calls governance_api, forwards upstream; `_apply_cleaned_text` is a no-op (see MOCKED_VS_PRODUCTION.md)
 - [x] 3. Identity Envelope Binder wired, never derived from model output
 - [x] 4. Receipt writer: hash-chain + HMAC sign, verified against `data_pipeline/ledger/verify_chain.py`
-- [~] 5. LangChain callback handler (`GovernanceCallbackHandler`) — written, not exercised against a real LangChain agent yet
-- [ ] 6. End-to-end: one real LangChain single-agent flow, one real tool, HIPAA pack, full loop verified
+- [x] 5. LangChain callback handler (`GovernanceCallbackHandler`) — exercised against a real (scripted, no API key) `langchain.agents.create_agent` loop; found and fixed a real bug along the way: `raise_error` defaults to `False` on `BaseCallbackHandler`, so a `PermissionError` raised in `on_tool_start` was being silently swallowed and the tool ran anyway (see adr/0012) — now set to `True` and pinned with a regression test
+- [x] 6. End-to-end: one real LangChain single-agent flow, one real tool, HIPAA pack, full loop verified (`governance_sdk/tests/test_langchain_integration.py`, `examples/langchain_single_agent.py`) — against the real `governance_api` in-process (no server/API key needed), not mocked
 
 **Day 2**
-- [~] 7. LangGraph `@governed_node` wrapping — decorator + helper exist; `wrap_graph_nodes` unverified against installed LangGraph API (see [docs/adr/0002](adr/0002-no-post-model-hook-lock-in.md))
+- [x] 7. LangGraph `@governed_node` wrapping — verified against the installed LangGraph API (adr/0012): `wrap_graph_nodes`'s original attribute assignment was genuinely broken (`.runnable` is a `RunnableCallable`, not directly callable — fixed by mutating `.runnable.func` in place); also found and fixed `governed_node` re-penalizing every downstream node for an upstream node's leak it only carried forward in state, never caused itself (`governance_sdk/tests/test_langgraph_integration.py`, `examples/langgraph_multi_agent.py`)
 - [x] 8. Delegation capping — `authority/delegation.py`, enforced in `AuthorityEngine.get_or_create`
 - [x] 9. Fail-closed behavior — `GovernanceClient._post`, proxy's `_fail_closed`
 - [~] 10. DPDP pack through the proxy path — pack config seeded; detectors ARE now wired into the engine (this note was stale — see Data Scientist Day1 #4/Day2 #5), so the only remaining blocker is `proxy/main.py` hardcoding `"pack_id": "hipaa"` on both compliance-check calls instead of making it selectable
-- [ ] 11. Demo script's three scenarios wired through both single- and multi-agent paths
+- [~] 11. Demo script's three scenarios wired through both single- and multi-agent paths — the MECHANISM is now proven working through both paths (#6/#7 above: tool allow/deny, PHI redaction+scoring, multi-agent handoff all verified for real), but the actual 3 canonical demo-script scenarios (same ones in `governance_api/tests/test_demo_scenarios.py`) haven't been composed into one script run through each path yet
 
 ## SWE #2 — Authority Engine & Dashboard Engineer
 

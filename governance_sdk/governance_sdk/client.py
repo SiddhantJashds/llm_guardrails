@@ -11,13 +11,32 @@ import httpx
 
 
 class GovernanceClient:
-    def __init__(self, base_url: Optional[str] = None, timeout: float = 2.0):
+    def __init__(
+        self,
+        base_url: Optional[str] = None,
+        timeout: float = 2.0,
+        client: Optional[httpx.Client] = None,
+    ):
         self.base_url = base_url or os.getenv("GOVERNANCE_API_URL", "http://localhost:8001")
         self.timeout = timeout
+        # Real usage (the default): a fresh httpx.post per call, as before --
+        # zero behavior change. `client` is for tests only: pass a
+        # fastapi.testclient.TestClient(governance_api_app) to exercise the
+        # real FastAPI app in-process, no real socket/port needed (see
+        # governance_sdk/tests/). NOT httpx.Client(transport=ASGITransport):
+        # that transport is async-only and doesn't work with a sync Client
+        # (confirmed -- raises AttributeError on .handle_request).
+        self._client = client
 
     def _post(self, path: str, payload: dict) -> dict:
         try:
-            resp = httpx.post(f"{self.base_url}{path}", json=payload, timeout=self.timeout)
+            if self._client is not None:
+                # No `timeout=` here: TestClient (unlike a real httpx.Client)
+                # warns this is deprecated on its .post() -- its own
+                # construction-time timeout is enough for tests.
+                resp = self._client.post(path, json=payload)
+            else:
+                resp = httpx.post(f"{self.base_url}{path}", json=payload, timeout=self.timeout)
             resp.raise_for_status()
             return resp.json()
         except httpx.HTTPError as exc:

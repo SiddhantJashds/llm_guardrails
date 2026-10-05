@@ -24,3 +24,4 @@ If you're not sure whether something rises to that bar, ask — or use the `deci
 | [0008](0008-ner-low-confidence-tier.md) | NER-derived detections are a low-confidence tier (small penalty, never block) | Accepted |
 | [0009](0009-no-signal-identifiers-for-metadata-markers.md) | Metadata markers (DPDP's `consent_purpose_flag`) cost the agent nothing | Accepted |
 | [0010](0010-wire-injection-detection-into-compliance-routes.md) | Wire prompt-injection detection into the real decision pipeline | Accepted |
+| [0011](0011-composite-rating-and-effective-use-formulas.md) | Composite trust rating / effective-use score: real formulas | Accepted |

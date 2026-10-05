@@ -6,7 +6,7 @@ Legend: `[ ]` not started · `[~]` scaffolded (file/wiring exists, real logic st
 
 Before marking anything `[x]` that touches `shared/`, `authority/`, `compliance/`, `access_control/`, or a route: run `pytest` from the repo root ([docs/adr/0007](adr/0007-tests-and-ci-before-handoff.md)). It also runs automatically in CI on every push/PR.
 
-Last updated: 2026-10-05 (Data Scientist Day 2 #5/#8 done: DPDP pack complete; prompt-injection detection wired into the real API for the first time (adr/0010) and validated against both packs' demo scenarios).
+Last updated: 2026-10-05 (Data Scientist Day 2 #5/#6/#8 done: DPDP pack complete; real composite-rating/effective-use formulas (adr/0011, unblocks Data Engineer #6); prompt-injection detection wired into the real API for the first time (adr/0010) and validated against both packs' demo scenarios. #9 (both teams) deferred to end-of-dev, blocked externally.)
 
 ## SWE #1 — Gateway & Integration Engineer
 
@@ -52,10 +52,10 @@ Last updated: 2026-10-05 (Data Scientist Day 2 #5/#8 done: DPDP pack complete; p
 
 **Day 2**
 - [~] 5. Token-usage ingestion pipeline — `ingest_event` exists; proxy doesn't call it yet (see MOCKED_VS_PRODUCTION.md)
-- [~] 6. User profile aggregation job — `user_profile_job.py` implemented with placeholder formulas; needs Data Scientist's real formulas
+- [x] 6. User profile aggregation job — `user_profile_job.py` now uses the Data Scientist's real formulas ([docs/adr/0011](adr/0011-composite-rating-and-effective-use-formulas.md)); unit+integration-tested
 - [x] 7. HIPAA↔DPDP overlap mapping (`data_pipeline/config/overlap_map.yaml`)
 - [ ] 8. Latency/overhead benchmarking — script exists (`benchmark_latency.py`), not yet run against a real upstream LLM
-- [ ] 9. Cross-team schema compatibility check against the other 3 teams' reference agents
+- [ ] 9. Cross-team schema compatibility check against the other 3 teams' reference agents — **deferred to end-of-dev** (2026-10-05): blocked on those agents existing, nothing to run this against yet; revisit once they're available rather than waiting on them
 
 ## Data Scientist — Compliance Detection & Scoring Logic
 
@@ -67,7 +67,7 @@ Last updated: 2026-10-05 (Data Scientist Day 2 #5/#8 done: DPDP pack complete; p
 
 **Day 2**
 - [x] 5. DPDP pack detectors — phone/email/aadhaar/pan regex + NER `full_name`/place-level `residential_address` (low-confidence tier) + street-address & labelled-PIN regex + bare-Indian-mobile recall fix + `consent_purpose_flag` heuristic (always zero-cost, [docs/adr/0009](adr/0009-no-signal-identifiers-for-metadata-markers.md)); overlap map done; unit-tested (`detectors/tests/test_dpdp.py`)
-- [~] 6. Composite trust rating / effective-use score — placeholder linear formulas in `user_profile_job.py`, need real formulas from you
+- [x] 6. Composite trust rating / effective-use score — rate-based `composite_rating` (0-100, violations weighted above denials) + `effective_use_score` (tokens per completed task); implemented in `data_pipeline/aggregation/user_profile_job.py`, unit+integration-tested (`data_pipeline/tests/test_user_profile_job.py`), see [docs/adr/0011](adr/0011-composite-rating-and-effective-use-formulas.md). Also fixed `violation_count` wrongly counting `log_only` verdicts as violations (adr/0009's principle extended here)
 - [x] 7. Prompt-injection heuristics (`detectors/injection/heuristics.py`) — instruction-override + forged-identity patterns, Unicode-normalization evasion handling, unit-tested; **and now actually wired into `compliance-check`/`handoff-check`** ([docs/adr/0010](adr/0010-wire-injection-detection-into-compliance-routes.md)) — the detector existed and passed its own tests since Day 2, but nothing in `governance_api` called it until now, so `prompt_injection_detected` never fired through the real API
 - [x] 8. Validate against demo script's 3 scenarios + adversarial injection case per pack — `governance_api/tests/test_demo_scenarios.py`, both packs, run against the real API (scope note in the file: this covers the governance_api-level pipeline the Data Scientist owns; wiring it through the actual LangChain/LangGraph paths is SWE#1 Day1 #6 / Day2 #7/#11)
-- [ ] 9. Cross-team detector coverage check — blocked on the other three teams' reference agents existing; nothing to run this against yet
+- [ ] 9. Cross-team detector coverage check — **deferred to end-of-dev** (2026-10-05): blocked on those agents existing, nothing to run this against yet; revisit once they're available rather than waiting on them

@@ -4,14 +4,22 @@ Points DATABASE_URL at a throwaway SQLite file BEFORE anything under
 governance_api/ or shared/ gets imported -- shared/db.py reads that env var
 at import time, so this has to happen first, at module scope, before the
 `from main import app` below.
+
+Uses `setdefault`, not a plain assignment: `shared.db`'s engine is a
+process-global singleton bound at first import, so in a combined `pytest`
+run from the repo root (now also collecting data_pipeline/tests), whichever
+test directory's conftest runs first wins for the WHOLE run -- harmless
+either way (every test here resets the schema itself, see `reset_db` below),
+but `setdefault` keeps this file from clobbering a value data_pipeline/tests'
+conftest already set, and vice versa, so neither ordering can break the other.
 """
 import os
 import sys
 from pathlib import Path
 
 _TEST_DB_PATH = Path(__file__).resolve().parent / "_test_governance.db"
-os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_DB_PATH}"
-os.environ["RECEIPT_SIGNING_SECRET"] = "test-signing-secret"
+os.environ.setdefault("DATABASE_URL", f"sqlite:///{_TEST_DB_PATH}")
+os.environ.setdefault("RECEIPT_SIGNING_SECRET", "test-signing-secret")
 
 # Mirrors the sys.path setup main.py/routes/*.py do themselves (they assume
 # being run via `cd governance_api && uvicorn main:app`) so `import main`,

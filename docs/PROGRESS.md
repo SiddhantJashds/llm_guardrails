@@ -6,13 +6,13 @@ Legend: `[ ]` not started · `[~]` scaffolded (file/wiring exists, real logic st
 
 Before marking anything `[x]` that touches `shared/`, `authority/`, `compliance/`, `access_control/`, or a route: run `pytest` from the repo root ([docs/adr/0007](adr/0007-tests-and-ci-before-handoff.md)). It also runs automatically in CI on every push/PR.
 
-Last updated: 2026-10-05 (SWE#1 Day1 #1/#5/#6 + Day2 #7 done: LangChain/LangGraph integrations actually run against the real API for the first time, not just written — found and fixed a real enforcement bug along the way (BaseCallbackHandler.raise_error defaulting False, see adr/0012). Also: Data Scientist Day 2 #5/#6/#8 done (DPDP pack, real composite-rating/effective-use formulas adr/0011, injection detection wired adr/0010). #9 items (both teams) deferred to end-of-dev, blocked externally.)
+Last updated: 2026-10-07 (SWE#1 Day1 #2 done: proxy payload rewriting implemented and tested; earlier 2026-10-05 notes in git history).
 
 ## SWE #1 (Sauda) — Gateway & Integration Engineer
 
 **Day 1**
 - [x] 1. Scaffold `governance_sdk` package with `GovernanceClient` + `@governed_tool` — now exercised against a real running agent ([docs/adr/0012](adr/0012-langchain-langgraph-verified-against-installed-apis.md); `governance_sdk/tests/`)
-- [~] 2. OpenAI-compatible reverse proxy (`proxy/main.py`) — accepts requests, calls governance_api, forwards upstream; `_apply_cleaned_text` is a no-op (see MOCKED_VS_PRODUCTION.md)
+- [x] 2. OpenAI-compatible reverse proxy (`proxy/main.py`) — accepts requests, calls governance_api, forwards upstream, and now writes redacted text back into the forwarded request and returned completion (`proxy/tests/test_payload_rewriting.py`, real governance_api in-process + stubbed upstream)
 - [x] 3. Identity Envelope Binder wired, never derived from model output
 - [x] 4. Receipt writer: hash-chain + HMAC sign, verified against `data_pipeline/ledger/verify_chain.py`
 - [x] 5. LangChain callback handler (`GovernanceCallbackHandler`) — exercised against a real (scripted, no API key) `langchain.agents.create_agent` loop; found and fixed a real bug along the way: `raise_error` defaults to `False` on `BaseCallbackHandler`, so a `PermissionError` raised in `on_tool_start` was being silently swallowed and the tool ran anyway (see adr/0012) — now set to `True` and pinned with a regression test

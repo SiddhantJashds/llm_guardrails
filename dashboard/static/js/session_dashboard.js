@@ -1,5 +1,4 @@
 // Per-agent trust score trend + violations + denied calls for one session.
-// TODO: this re-fetches on demand; wire to polling or SSE for "live" per objective #11.
 const SERIES_COLORS = ["--series-1", "--series-2", "--series-3", "--series-4"];
 
 function cssVar(name) {
@@ -7,15 +6,27 @@ function cssVar(name) {
 }
 
 let trendChart = null;
+let pollInterval = null;
+let sessionId = "";
 
 async function loadSession() {
-  const sessionId = document.getElementById("session-id-input").value.trim();
+  sessionId = document.getElementById("session-id-input").value.trim();
   if (!sessionId) return;
+  if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+  await refreshData();
+  pollInterval = setInterval(refreshData, 3000);
+}
 
-  const data = await fetchSessionDashboard(sessionId);
-  renderTrendChart(data.agents);
-  renderViolations(data.agents);
-  renderDeniedCalls(data.agents);
+async function refreshData() {
+  if (!sessionId) return;
+  try {
+    const data = await fetchSessionDashboard(sessionId);
+    renderTrendChart(data.agents);
+    renderViolations(data.agents);
+    renderDeniedCalls(data.agents);
+  } catch (e) {
+    console.warn("Live refresh failed:", e);
+  }
 }
 
 function renderTrendChart(agents) {
@@ -102,4 +113,12 @@ function renderDeniedCalls(agents) {
   </table>`;
 }
 
-document.getElementById("load-session-btn").addEventListener("click", loadSession);
+// Show live indicator once polling starts.
+function setLive(active) {
+  const badge = document.getElementById("live-indicator");
+  if (badge) badge.style.display = active ? "inline" : "none";
+}
+document.getElementById("load-session-btn").addEventListener("click", () => {
+  loadSession();
+  setLive(true);
+});

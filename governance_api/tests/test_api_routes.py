@@ -220,6 +220,54 @@ def test_handoff_check_detects_injection_in_the_handed_off_agents_output(client,
     assert score == 75.0
 
 
+def test_handoff_check_blocks_when_session_min_score_falls_below_threshold(client, db_session):
+    from authority.engine import AuthorityEngine
+
+    session_id = "rollup_session"
+    # Agent A gets violations -> score drops below 60
+    agent_a = make_identity(agent_id="rollup_agent_a", session_id=session_id)
+    engine = AuthorityEngine(db_session)
+    engine.get_or_create(agent_a["agent_id"], agent_a["session_id"], None)
+    engine.apply_signal(agent_a["agent_id"], "phi_in_output")  # 100 -> 80
+    engine.apply_signal(agent_a["agent_id"], "phi_in_output")  # 80 -> 60
+    engine.apply_signal(agent_a["agent_id"], "phi_in_output")  # 60 -> 40
+
+    # Agent B is fresh (score 100) but in the same session
+    agent_b = make_identity(agent_id="rollup_agent_b", session_id=session_id)
+    engine.get_or_create(agent_b["agent_id"], agent_b["session_id"], None)
+
+    # handoff_check for agent B should be blocked because session-min (agent A's 40) < 60
+    resp = client.post(
+        "/governance/handoff-check",
+        json={"identity": agent_b, "output_text": "benign handoff output", "pack_id": "hipaa"},
+    )
+    body = resp.json()
+    assert body["allowed"] is False
+    assert "session-level block" in body["reason"]
+    assert "rollup_agent_a" in body["reason"]
+
+
+def test_handoff_check_allows_when_all_agents_stay_above_threshold(client, db_session):
+    from authority.engine import AuthorityEngine
+
+    session_id = "rollup_clean_session"
+    agent_a = make_identity(agent_id="clean_agent_a", session_id=session_id)
+    engine = AuthorityEngine(db_session)
+    engine.get_or_create(agent_a["agent_id"], agent_a["session_id"], None)
+    # One minor hit: NER-only (-5) keeps score at 95, well above 60
+    engine.apply_signal(agent_a["agent_id"], "prompt_injection_detected")  # 100 -> 75
+
+    agent_b = make_identity(agent_id="clean_agent_b", session_id=session_id)
+    engine.get_or_create(agent_b["agent_id"], agent_b["session_id"], None)
+
+    resp = client.post(
+        "/governance/handoff-check",
+        json={"identity": agent_b, "output_text": "clean handoff", "pack_id": "hipaa"},
+    )
+    body = resp.json()
+    assert body["allowed"] is True
+
+
 def test_authority_penalty_tables_stay_in_sync():
     # authority/engine.py keeps its own copy of the table the Data Scientist owns
     # in detectors/scoring/signals.py -- fail loudly if they drift apart.

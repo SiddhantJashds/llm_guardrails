@@ -21,8 +21,9 @@ from shared.schemas import (  # noqa: E402
 from detectors.injection.heuristics import detect as detect_injection  # noqa: E402
 from detectors.scoring.signals import phi_signal  # noqa: E402
 from access_control.overrides import is_unredacted_allowed
-from authority.engine import AuthorityEngine
-from authority.policy_gates import required_threshold
+from authority.engine import AuthorityEngine, DEFAULT_SCORE
+from shared.models import AgentTrustState
+from authority.policy_gates import required_threshold, DEFAULT_THRESHOLD
 from compliance import engine as compliance_engine
 from receipts.writer import write_receipt
 
@@ -132,13 +133,28 @@ def handoff_check(req: HandoffCheckRequest, db: Session = Depends(get_db)):
     if violations or injection_hits:
         _apply_signals(engine, req.identity.agent_id, violations, injection_hits)
 
-    # TODO (SWE#2 Day2 #7): roll up multiple agents' scores in a session so
-    # the FINAL output can be blocked even if no single agent alone breaches
-    # threshold -- currently this only evaluates the one agent_id in `req`.
-    # Injection detection never gates this `allowed` decision by itself, only
-    # the authority score above -- same rule as compliance-check.
-    allowed = verdict != "block"
-    reason = None if allowed else f"output blocked: not {req.pack_id.upper()}-compliant"
+    # Roll up all agents' scores in this session so the FINAL output can be
+    # blocked even if no single agent alone breaches threshold -- if the
+    # lowest score across all agents in the session is below the default
+    # authority threshold, block with an explicit per-agent reason.
+    all_states = (
+        db.query(AgentTrustState)
+        .filter(AgentTrustState.session_id == req.identity.session_id)
+        .all()
+    )
+    session_min_score = min((s.current_score for s in all_states), default=DEFAULT_SCORE)
+
+    allowed = verdict != "block" and session_min_score >= DEFAULT_THRESHOLD
+    reason = None
+    if not allowed:
+        if verdict == "block":
+            reason = f"output blocked: not {req.pack_id.upper()}-compliant"
+        else:
+            worst = min(all_states, key=lambda s: s.current_score)
+            reason = (
+                f"session-level block: lowest score {worst.current_score:.1f} "
+                f"(agent_id={worst.agent_id}) below threshold"
+            )
 
     receipt = write_receipt(
         db,

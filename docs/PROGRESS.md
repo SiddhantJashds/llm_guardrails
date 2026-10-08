@@ -6,7 +6,7 @@ Legend: `[ ]` not started · `[~]` scaffolded (file/wiring exists, real logic st
 
 Before marking anything `[x]` that touches `shared/`, `authority/`, `compliance/`, `access_control/`, or a route: run `pytest` from the repo root ([docs/adr/0007](adr/0007-tests-and-ci-before-handoff.md)). It also runs automatically in CI on every push/PR.
 
-Last updated: 2026-10-07 (SWE#2 Day2 #7 done: per-agent rollup in handoff-check — queries all agents in a session, blocks if lowest score < threshold. Day2 #8 done: dashboard frontend now has 3s polling with green "● Live" badge on both session and user views.)
+Last updated: 2026-10-08 (Data Engineer Day2 #8 done: latency benchmarking script ran against real upstream LLM, ~83ms overhead; benchmark_latency.py syntax fix applied.)
 
 ## SWE #1 (Sauda) — Gateway & Integration Engineer
 
@@ -54,7 +54,7 @@ Last updated: 2026-10-07 (SWE#2 Day2 #7 done: per-agent rollup in handoff-check 
 - [~] 5. Token-usage ingestion pipeline — `ingest_event` exists; proxy doesn't call it yet (see MOCKED_VS_PRODUCTION.md)
 - [x] 6. User profile aggregation job — `user_profile_job.py` now uses the Data Scientist's real formulas ([docs/adr/0011](adr/0011-composite-rating-and-effective-use-formulas.md)); unit+integration-tested
 - [x] 7. HIPAA↔DPDP overlap mapping (`data_pipeline/config/overlap_map.yaml`)
-- [ ] 8. Latency/overhead benchmarking — script exists (`benchmark_latency.py`), not yet run against a real upstream LLM
+- [x] 8. Latency/overhead benchmarking — script ran against real upstream LLM, produced before/after timing (0.341s direct vs 0.424s proxied, ~83ms overhead)
 - [ ] 9. Cross-team schema compatibility check against the other 3 teams' reference agents — **deferred to end-of-dev** (2026-10-05): blocked on those agents existing, nothing to run this against yet; revisit once they're available rather than waiting on them
 
 ## Data Scientist (Siddhant) — Compliance Detection & Scoring Logic

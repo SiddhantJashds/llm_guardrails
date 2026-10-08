@@ -133,3 +133,13 @@ th { color: var(--text-muted); font-weight: 500; }
 .empty-state { color: var(--text-muted); font-size: 13px; padding: 12px 0; }
 
 canvas { max-height: 260px; }
+
+.live-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--status-good);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--status-good) 12%, transparent);
+  margin-left: 8px;
+}

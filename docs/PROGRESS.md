@@ -6,7 +6,7 @@ Legend: `[ ]` not started · `[~]` scaffolded (file/wiring exists, real logic st
 
 Before marking anything `[x]` that touches `shared/`, `authority/`, `compliance/`, `access_control/`, or a route: run `pytest` from the repo root ([docs/adr/0007](adr/0007-tests-and-ci-before-handoff.md)). It also runs automatically in CI on every push/PR.
 
-Last updated: 2026-10-07 (SWE#2 Day2 #7 done: per-agent rollup in handoff-check — queries all agents in a session, blocks if lowest score < threshold)
+Last updated: 2026-10-07 (SWE#2 Day2 #7 done: per-agent rollup in handoff-check — queries all agents in a session, blocks if lowest score < threshold. Day2 #8 done: dashboard frontend now has 3s polling with green "● Live" badge on both session and user views.)
 
 ## SWE #1 (Sauda) — Gateway & Integration Engineer
 
@@ -37,7 +37,7 @@ Last updated: 2026-10-07 (SWE#2 Day2 #7 done: per-agent rollup in handoff-check 
 **Day 2**
 - [x] 6. Per-tool thresholds admin-editable (not hardcoded) — `ToolThresholdConfig`, `/admin/tool-thresholds`
 - [x] 7. Per-agent rollup across a session (block final output if enough agents violate) — `handoff_check` now queries all `AgentTrustState` rows for the session, uses the lowest score vs. `DEFAULT_THRESHOLD` (60) to decide; added tests `test_handoff_check_blocks_when_session_min_score_falls_below_threshold` and `test_handoff_check_allows_when_all_agents_stay_above_threshold`
-- [~] 8. Dashboard frontend — session view + per-user view built (`dashboard/index.html`, `user.html`); no live polling yet, manual "Load" button
+- [x] 8. Dashboard frontend — session view + per-user view built (`dashboard/index.html`, `user.html`); live polling at 3s interval with green "● Live (3s)" badge, starts on "Load" click, stops on re-load (clears interval); static CSS badge added
 - [x] 8b. Admin page (config-only, [docs/adr/0005](adr/0005-user-identity-no-auth.md)) — thresholds, pack actions, per-user_id override, `dashboard/admin.html`
 - [~] 9. Per-user token usage display — dashboard reads `UserProfile`; nothing populates it yet (see Data Engineer Day2 #5)
 - [ ] 10. Demo script attribution check across both paths

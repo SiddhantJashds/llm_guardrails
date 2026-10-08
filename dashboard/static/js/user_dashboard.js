@@ -1,14 +1,26 @@
 // Per-user token usage + composite rating + violation/decision history.
 let usageChart = null;
+let pollInterval = null;
+let userId = "";
 
 async function loadUser() {
-  const userId = document.getElementById("user-id-input").value.trim();
+  userId = document.getElementById("user-id-input").value.trim();
   if (!userId) return;
+  if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+  await refreshData();
+  pollInterval = setInterval(refreshData, 3000);
+}
 
-  const data = await fetchUserDashboard(userId);
-  renderProfileTiles(data.profile);
-  renderUsageChart(data.profile);
-  renderDecisionHistory(data.recent_decisions);
+async function refreshData() {
+  if (!userId) return;
+  try {
+    const data = await fetchUserDashboard(userId);
+    renderProfileTiles(data.profile);
+    renderUsageChart(data.profile);
+    renderDecisionHistory(data.recent_decisions);
+  } catch (e) {
+    console.warn("Live refresh failed:", e);
+  }
 }
 
 function cssVar(name) {
@@ -71,4 +83,11 @@ function renderDecisionHistory(decisions) {
   </table>`;
 }
 
-document.getElementById("load-user-btn").addEventListener("click", loadUser);
+function setLive(active) {
+  const badge = document.getElementById("live-indicator");
+  if (badge) badge.style.display = active ? "inline" : "none";
+}
+document.getElementById("load-user-btn").addEventListener("click", () => {
+  loadUser();
+  setLive(true);
+});

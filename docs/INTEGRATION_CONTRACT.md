@@ -34,9 +34,12 @@ resp = httpx.post(
         "x-session-id": session_id,    # optional; minted if omitted
         "x-agent-id": agent_id,        # optional; minted if omitted
         "x-request-unredacted": "false",  # optional; see docs/adr/0003
+        "x-compliance-pack": "hipaa",  # optional; "hipaa" (default) or "dpdp"
     },
 )
 ```
+
+`x-compliance-pack` picks which pack's detectors run (HIPAA for healthcare data, DPDP for general Indian personal data). Like the identity fields it is set by your trusted code, never read from message text. An unknown value gets a `400 unknown_compliance_pack` rather than being passed along: the compliance engine would treat a pack it doesn't know as "no detectors" and let everything through unscanned.
 
 That's the entire integration — inbound/outbound compliance checks happen inside the proxy. See `examples/chat_interface.py` and `examples/rag_interface.py`.
 

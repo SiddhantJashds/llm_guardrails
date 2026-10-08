@@ -6,7 +6,8 @@ Legend: `[ ]` not started · `[~]` scaffolded (file/wiring exists, real logic st
 
 Before marking anything `[x]` that touches `shared/`, `authority/`, `compliance/`, `access_control/`, or a route: run `pytest` from the repo root ([docs/adr/0007](adr/0007-tests-and-ci-before-handoff.md)). It also runs automatically in CI on every push/PR.
 
-Last updated: 2026-10-08 (Data Engineer Day2 #8 done: latency benchmarking script ran against real upstream LLM, ~83ms overhead; benchmark_latency.py syntax fix applied.)
+
+Last updated: 2026-10-08 (Data Engineer Day2 #8 done: latency benchmarking script ran against real upstream LLM, ~83ms overhead; benchmark_latency.py syntax fix applied. SWE#1 Day2 #10 done: proxy selects HIPAA/DPDP per request via `x-compliance-pack`.)
 
 ## SWE #1 (Sauda) — Gateway & Integration Engineer
 
@@ -22,7 +23,7 @@ Last updated: 2026-10-08 (Data Engineer Day2 #8 done: latency benchmarking scrip
 - [x] 7. LangGraph `@governed_node` wrapping — verified against the installed LangGraph API (adr/0012): `wrap_graph_nodes`'s original attribute assignment was genuinely broken (`.runnable` is a `RunnableCallable`, not directly callable — fixed by mutating `.runnable.func` in place); also found and fixed `governed_node` re-penalizing every downstream node for an upstream node's leak it only carried forward in state, never caused itself (`governance_sdk/tests/test_langgraph_integration.py`, `examples/langgraph_multi_agent.py`)
 - [x] 8. Delegation capping — `authority/delegation.py`, enforced in `AuthorityEngine.get_or_create`
 - [x] 9. Fail-closed behavior — `GovernanceClient._post`, proxy's `_fail_closed`
-- [~] 10. DPDP pack through the proxy path — pack config seeded; detectors ARE now wired into the engine (this note was stale — see Data Scientist Day1 #4/Day2 #5), so the only remaining blocker is `proxy/main.py` hardcoding `"pack_id": "hipaa"` on both compliance-check calls instead of making it selectable
+- [x] 10. DPDP pack through the proxy path — `proxy/main.py` takes the pack from an `x-compliance-pack` header (`hipaa` default, `dpdp`; unknown value → 400, since the engine would otherwise silently allow it); DPDP PAN hashed / Aadhaar blocked / HIPAA-only SSN left alone, inbound and outbound, against the real governance_api with the shipped pack configs (`proxy/tests/test_pack_selection.py`)
 - [~] 11. Demo script's three scenarios wired through both single- and multi-agent paths — the MECHANISM is now proven working through both paths (#6/#7 above: tool allow/deny, PHI redaction+scoring, multi-agent handoff all verified for real), but the actual 3 canonical demo-script scenarios (same ones in `governance_api/tests/test_demo_scenarios.py`) haven't been composed into one script run through each path yet
 
 ## SWE #2 (Harsh) — Authority Engine & Dashboard Engineer

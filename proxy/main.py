@@ -7,13 +7,29 @@ reaches, or after it leaves, the real upstream LLM.
 
 Run: `uvicorn main:app --port 8000` from inside this directory.
 """
-import json
 import os
 import sys
 from pathlib import Path
 
+# ── auto-load .env from repo root so env vars are always available ──
+# We always run uvicorn from inside proxy/, so the repo root is one level up.
+# Use cwd (guaranteed to be proxy/) → parent = repo root, not __file__ which
+# may resolve differently depending on how uvicorn imports the module.
+_REPO_ROOT = str(Path.cwd().parent)
+_ENV_PATH = os.path.join(_REPO_ROOT, ".env")
+if os.path.isfile(_ENV_PATH):
+    with open(_ENV_PATH) as _f:
+        for line in _f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, _, value = line.partition("=")
+                key = key.strip()
+                value = value.strip()
+                os.environ[key] = value
+
 import httpx
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))  # allow `import shared`
@@ -26,9 +42,33 @@ GOVERNANCE_API_URL = os.getenv("GOVERNANCE_API_URL", "http://localhost:8001")
 app = FastAPI(title="governance-proxy")
 
 
+@app.middleware("http")
+async def debug_request(request: Request, call_next):
+    if request.url.path == "/v1/chat/completions":
+        print(f"[DEBUG] {request.method} {request.url.path} cl={request.headers.get('content-length')} ct={request.headers.get('content-type')}")
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        import traceback
+        print(f"[DEBUG EXC] {request.url.path}: {exc}")
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
 @app.post("/v1/chat/completions")
 async def chat_completions(request: Request):
-    body = await request.json()
+    try:
+        body = await request.json()
+    except Exception as exc:
+        print(f"[DEBUG JSON ERROR] {exc}")
+        return JSONResponse(status_code=400, content={"error": f"invalid_json: {exc}"})
+
+    print(f"[DEBUG] body model={body.get('model')} messages={len(body.get('messages',[]))}")
 
     # Identity is set here, by trusted proxy code -- never parsed from the
     # request body's message content (see docs/HACKATHON_PLAN.md hardening #2).
@@ -44,6 +84,7 @@ async def chat_completions(request: Request):
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         async def check(text: str, direction: str) -> dict:
+            print(f"[DEBUG] compliance-check dir={direction} text_len={len(text)}")
             return _fail_closed(
                 await client.post(
                     f"{GOVERNANCE_API_URL}/governance/compliance-check",
@@ -58,42 +99,54 @@ async def chat_completions(request: Request):
             )
 
         # 1. Inbound compliance check
+        segments = _prompt_segments(body)
+        print(f"[DEBUG] step1: inbound check, segments={len(segments)}")
         cleaned_parts = []
-        for _, (_kind, _idx, text) in (segments := _prompt_segments(body)):
+        for _, (_kind, _idx, text) in segments:
             result = await check(text, "inbound")
+            print(f"[DEBUG] compliance verdict={result['verdict']}")
             if result["verdict"] == "block":
                 return _blocked(result)
             cleaned_parts.append(result.get("cleaned_text", text))
         try:
             body = _apply_cleaned_prompt(body, segments, cleaned_parts)
         except ValueError:
+            print(f"[DEBUG] step1: apply_cleaned_prompt FAILED")
             return _cannot_apply_cleaned_text()
+        print(f"[DEBUG] step1 done")
 
         # 2. Forward to the real upstream LLM
+        print(f"[DEBUG] step2: forward to upstream {UPSTREAM_LLM_BASE_URL}")
         upstream_resp = await client.post(
             f"{UPSTREAM_LLM_BASE_URL}/chat/completions",
             json=body,
             headers={"Authorization": f"Bearer {UPSTREAM_LLM_API_KEY}"},
         )
+        print(f"[DEBUG] upstream status={upstream_resp.status_code}")
         try:
             completion = upstream_resp.json()
         except ValueError:
             return JSONResponse(status_code=502, content={"error": "upstream_invalid_response"})
         if upstream_resp.status_code >= 400:
-            # The upstream's own error (bad key, rate limit, ...) -- relay it with its real status.
+            print(f"[DEBUG] upstream error body={upstream_resp.text[:200]}")
             return JSONResponse(status_code=upstream_resp.status_code, content=completion)
 
         # 3. Outbound compliance check
+        segments = _completion_segments(completion)
+        print(f"[DEBUG] step3: outbound check, segments={len(segments)}")
         cleaned_parts = []
-        for _, (_kind, _idx, text) in (segments := _completion_segments(completion)):
+        for _, (_kind, _idx, text) in segments:
             result = await check(text, "outbound")
+            print(f"[DEBUG] outbound verdict={result['verdict']}")
             if result["verdict"] == "block":
                 return _blocked(result)
             cleaned_parts.append(result.get("cleaned_text", text))
         try:
             completion = _apply_cleaned_completion(completion, segments, cleaned_parts)
         except ValueError:
+            print(f"[DEBUG] step3: apply_cleaned_completion FAILED")
             return _cannot_apply_cleaned_text()
+        print(f"[DEBUG] step3 done — returning response")
 
     return completion
 

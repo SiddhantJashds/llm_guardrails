@@ -14,7 +14,7 @@ PROXY_URL = os.getenv("PROXY_URL", "http://localhost:8000/v1/chat/completions")
 def ask(message: str, user_id: str = "demo_user") -> str:
     resp = httpx.post(
         PROXY_URL,
-        json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": message}]},
+        json={"model": "nvidia/Qwen3.6-35B-A3B-NVFP4", "messages": [{"role": "user", "content": message}]},
         headers={"x-user-id": user_id},
         timeout=30.0,
     )
@@ -25,4 +25,10 @@ def ask(message: str, user_id: str = "demo_user") -> str:
 
 
 if __name__ == "__main__":
-    print(ask("What's the phone number on file for patient John Doe?"))
+    print("Chat (type 'quit' or 'exit' to stop)\n")
+    while True:
+        user_input = input("> ")
+        if user_input.lower() in ("quit", "exit"):
+            break
+        response = ask(user_input)
+        print(f"{response}\n")

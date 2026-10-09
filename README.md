@@ -133,15 +133,27 @@ def ask(query: str, user_id: str) -> str:
 
 That's the entire integration. Both the retrieved context and the model's answer pass through the same inbound/outbound HIPAA/DPDP checks as a plain chat message — if a retrieved patient record contains a phone number, it gets redacted from the outbound completion the same way a directly-typed one would. See `examples/rag_interface.py` for a runnable version, and [docs/INTEGRATION_CONTRACT.md](docs/INTEGRATION_CONTRACT.md) for the full attachment-point reference (chat/RAG, LangChain, LangGraph).
 
+## Redaction & Role-Based Views
+
+See [docs/adr/0016](docs/adr/0016-redaction-redesign.md) for the complete architecture:
+- **Stable placeholders for the model**: Values are replaced with typed, numbered placeholders (`[NAME_1]`, `[PHONE_1]`, `[EMAIL_1]`) that stay stable across conversation turns within a session. The upstream model never sees raw values, preserving privacy and multi-turn coherence.
+- **Restoration to sender**: Outbound replies can restore the user's own typed values (`Hello, Alex`), but **only when the caller opts in** via header `x-restore-to-sender: true`. This applies only to end-user input, never to RAG context or database records.
+- **Granular redaction roles**: Roles (`clinician`, `auditor`, custom) act as a cap on what a user can view when requesting an unredacted view (`x-request-unredacted: true`). Visibility levels per identifier are `hidden` (placeholder), `partial` (masked with last N digits visible), or `full`. Block and hash actions are never relaxed.
+- **Supported headers**:
+  - `x-compliance-pack`: `hipaa` or `dpdp`
+  - `x-restore-to-sender`: `true` to restore sender's own values in outbound responses (chat only)
+  - `x-request-unredacted`: `true` to request role-permitted unredacted/partial views
+
 ## Admin portal
 
-There's no login and no role/permission system — see [docs/adr/0005](docs/adr/0005-user-identity-no-auth.md) for why, given the problem statement's explicit non-goal on auth/identity management. What exists instead is a **config-only** **Policy settings** page in the console (`index.html#/admin`; the old `dashboard/admin.html` redirects there):
+There's no login and no auth/user creation — see [docs/adr/0005](docs/adr/0005-user-identity-no-auth.md) and [docs/adr/0016](docs/adr/0016-redaction-redesign.md). What exists instead is a **config-only** **Policy settings** page in the console (`index.html#/admin`; the old `dashboard/admin.html` redirects there):
 
 - **Per-tool authority thresholds** — edit the score a tool requires (e.g. `sql_query_tool: 75`) and save; takes effect on the next `/governance/tool-check` immediately, no restart needed.
-- **HIPAA / DPDP pack actions** — change what happens when an identifier is found (`redact` / `block` / `hash` / `log_only`) per identifier, per pack.
-- **Per-`user_id` unredacted override** — every user is fully restrictive by default (redact always wins). Enter a `user_id`, check "allow unredacted", save. This alone does **not** unmask anything — the caller must *also* send `x-request-unredacted: true` on that specific request (see `proxy/main.py`). Both are required, matching the "redact by default, explicit ask to see it" rule from the kickoff meeting ([docs/adr/0003](docs/adr/0003-redact-by-default.md)). `block`/`hash` identifiers (SSN, Aadhaar, etc.) are never affected by this override.
-
-- **Reset activity data** — deletes all audit records, trust state, token usage and user profiles for a fresh demo (type `RESET` to confirm); policy settings are kept. `POST /admin/reset` with `{"confirm": "RESET"}`.
+- **Identifier rules per pack** — configure `action` (`redact` / `block` / `hash` / `log_only`), `style` (`token` / `partial` / `masked`), `keep_last` characters, `restore_to_sender`, and `applies_to` (`both` / `inbound` / `outbound`) per identifier for HIPAA and DPDP.
+- **Redaction roles matrix** — configure granular visibility levels (`hidden` / `partial` / `full`) across identifiers for roles like Clinician and Auditor, with an Add Role control.
+- **User role assignments** — assign users to redaction roles.
+- **Per-`user_id` unredacted override (legacy)** — every user is fully restrictive by default (redact always wins). Assigning an override behaves like an all-`full` role when `x-request-unredacted: true` is sent.
+- **Reset activity data** — deletes all audit records, trust state, token usage and user profiles for a fresh demo (type `RESET` to confirm); clears the session placeholder vault; policy settings are kept. `POST /admin/reset` with `{"confirm": "RESET"}`.
 
 All of this is backed by `governance_api/routes/admin.py` if you'd rather script changes than click through the page — e.g. `curl -X PUT localhost:8001/admin/users/demo_user -d '{"allow_unredacted": true}'`.
 

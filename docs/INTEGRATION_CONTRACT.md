@@ -33,7 +33,8 @@ resp = httpx.post(
         "x-user-id": user_id,          # required
         "x-session-id": session_id,    # optional; minted if omitted
         "x-agent-id": agent_id,        # optional; minted if omitted
-        "x-request-unredacted": "false",  # optional; see docs/adr/0003
+        "x-request-unredacted": "false",  # optional; role-capped view (docs/adr/0016)
+        "x-restore-to-sender": "false",   # optional; restore sender's own values (docs/adr/0016)
         "x-compliance-pack": "hipaa",  # optional; "hipaa" (default) or "dpdp"
     },
 )
@@ -41,11 +42,24 @@ resp = httpx.post(
 
 `x-compliance-pack` picks which pack's detectors run (HIPAA for healthcare data, DPDP for general Indian personal data). Like the identity fields it is set by your trusted code, never read from message text. An unknown value gets a `400 unknown_compliance_pack` rather than being passed along: the compliance engine would treat a pack it doesn't know as "no detectors" and let everything through unscanned.
 
+`x-restore-to-sender`: when set to `"true"`, the proxy restores the end-user's own typed identifiers in outbound replies (e.g. `Hello, [NAME_1]` -> `Hello, Alex`). **CRITICAL**: Only use this for direct end-user chat where user messages contain solely the user's own input. **NEVER** set `x-restore-to-sender` for RAG applications or agent workflows where prompts include retrieved third-party records or document text, or third-party PII will be leaked.
+
+`x-request-unredacted`: when set to `"true"`, requests a role-permitted view (ADR 0016). What is revealed is capped by the user's role (`hidden`, `partial`, `full`); without this header, everyone receives placeholders. Block and hash actions are never relaxed.
+
 That's the entire integration — inbound/outbound compliance checks happen inside the proxy. See `examples/chat_interface.py` and `examples/rag_interface.py`.
 
-For RAG specifically: retrieved document text is just more untrusted input. Concatenate it into the prompt as usual and send the whole thing through the proxy exactly like a chat message — the inbound check treats it identically, and a leaked PHI/PII identifier from a retrieved document gets caught the same way a user-typed one would. It's also where prompt-injection detection runs ([docs/adr/0010](adr/0010-wire-injection-detection-into-compliance-routes.md)) — a retrieved document trying "ignore previous instructions" is caught exactly like a user typing it, since both go through the same inbound check with no special-casing by source.
+For RAG specifically: retrieved document text is just more untrusted input. Concatenate it into the prompt as usual and send the whole thing through the proxy exactly like a chat message — the inbound check treats it identically, and a leaked PHI/PII identifier from a retrieved document gets caught the same way a user-typed one would. It's also where prompt-injection detection runs ([docs/adr/0010](adr/0010-wire-injection-detection-into-compliance-routes.md)) — a retrieved document trying "ignore previous instructions" is caught exactly like a user typing it, since both go through the same inbound check with no special-casing by source. Never enable `x-restore-to-sender` on RAG requests.
 
-**If you call `/governance/compliance-check` directly** (rather than going through the proxy, which already sets this correctly): `direction` isn't decorative — only `"inbound"` is checked for prompt-injection phrasing (`"outbound"`, the model's own answer, is not). The response also now carries `injection_hits: List[str]` (default `[]`, additive) alongside `violations`.
+**If you call `/governance/compliance-check` directly** (rather than going through the proxy, which already sets this correctly): `direction` isn't decorative — only `"inbound"` is checked for prompt-injection phrasing (`"outbound"`, the model's own answer, is not).
+The response returns:
+- `verdict`: `"allow"`, `"redact"`, `"block"`, `"hash"`, or `"log_only"`
+- `cleaned_text`: compatibility field (`model_text` for inbound checks, `display_text` for outbound checks)
+- `model_text`: what is forwarded to the upstream model (placeholders like `[NAME_1]`, masks, or hashes; never raw values)
+- `display_text`: what the requesting person sees (with sender's own values restored if opted in, and role views applied if requested)
+- `violations`: list of detected identifier types
+- `injection_hits`: list of detected injection heuristics (for inbound checks)
+- `entities`: structured list of entity replacements and actions
+- `receipt_id`: audit record ID
 
 ### 2. LangChain single-agent
 

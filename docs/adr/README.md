@@ -29,3 +29,4 @@ If you're not sure whether something rises to that bar, ask — or use the `deci
 | [0013](0013-session-scoped-trust-state.md) | Trust state keyed per (agent, session), not per agent | Accepted |
 | [0014](0014-tool-result-scans-dont-charge-score.md) | Tool-result scans redact but don't charge score | Accepted |
 | [0015](0015-governance-console.md) | Governance console: vendored assets, live profiles, redacted conversation capture | Accepted |
+| [0016](0016-redaction-redesign.md) | Redaction redesign: stable placeholders, sender restoration, and role-capped views | Accepted |

@@ -35,6 +35,9 @@ from fastapi.responses import JSONResponse
 sys.path.append(str(Path(__file__).resolve().parents[1]))  # allow `import shared`
 from shared.identity import new_session_id, new_agent_id  # noqa: E402
 
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # allow `import data_pipeline`
+from data_pipeline.ingestion.token_usage_pipeline import ingest_event  # noqa: E402
+
 UPSTREAM_LLM_BASE_URL = os.getenv("UPSTREAM_LLM_BASE_URL", "https://api.openai.com/v1")
 UPSTREAM_LLM_API_KEY = os.getenv("UPSTREAM_LLM_API_KEY", "")
 GOVERNANCE_API_URL = os.getenv("GOVERNANCE_API_URL", "http://localhost:8001")
@@ -130,6 +133,12 @@ async def chat_completions(request: Request):
         if upstream_resp.status_code >= 400:
             print(f"[DEBUG] upstream error body={upstream_resp.text[:200]}")
             return JSONResponse(status_code=upstream_resp.status_code, content=completion)
+
+        # Ingest token usage for per-user tracking
+        usage = completion.get("usage", {})
+        ingest_event(identity["user_id"], identity["session_id"], identity["agent_id"],
+                     tokens_in=usage.get("prompt_tokens", 0) or 0,
+                     tokens_out=usage.get("completion_tokens", 0) or 0)
 
         # 3. Outbound compliance check
         segments = _completion_segments(completion)

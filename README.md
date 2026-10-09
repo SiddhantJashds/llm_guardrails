@@ -25,6 +25,7 @@ Runs automatically on every push/PR via `.github/workflows/tests.yml`. One test 
 | [docs/INTEGRATION_CONTRACT.md](docs/INTEGRATION_CONTRACT.md) | The handoff doc for the other 3 hackathon teams: exactly how to attach a LangChain/LangGraph/chat/RAG agent to this runtime |
 | [docs/MOCKED_VS_PRODUCTION.md](docs/MOCKED_VS_PRODUCTION.md) | What's a real implementation vs. a placeholder, and what production-grade would need |
 | [docs/PROGRESS.md](docs/PROGRESS.md) | Live per-role checklist against the plan's build steps |
+| [docs/BENCH_BRIDGE.md](docs/BENCH_BRIDGE.md) | Running GuardRailBench-Sample against this runtime via `bench_bridge/` (mapping, thresholds, 3/3 result) |
 
 ## Layout
 
@@ -36,8 +37,10 @@ governance_api/    Authority engine, compliance engine, receipt writer, /governa
 dashboard/         Static HTML/JS/CSS dashboard (session view + per-user view), no build step                                    [SWE #2 -- Harsh]
 data_pipeline/     Ledger chain verification, token-usage ingestion, user-profile aggregation, compliance pack config, benchmarking [Data Engineer -- Somu]
 detectors/         HIPAA/DPDP identifier detectors, prompt-injection heuristics, trust-score signal table                        [Data Scientist -- Siddhant]
-examples/          The four reference agents (chat, RAG, LangChain single-agent, LangGraph multi-agent) used for cross-team testing
+examples/          Reference agents: stateless chat, memory chat (LangGraph checkpointer), RAG, LangChain single-agent, LangGraph multi-agent
+bench_bridge/      GuardRailBench hook-contract adapter (`/api/v1/*` on :8080 → governance_api) -- see docs/BENCH_BRIDGE.md
 scripts/           init_db.py -- creates tables + seeds compliance pack config from data_pipeline/config/*.yaml
+run.sh             One-command startup (uv): reads WITH_BRIDGE from .env, starts api/proxy/dashboard (+bridge in bench mode)
 ```
 
 Every file with a `TODO` is a placeholder — the shapes, wiring, and interfaces are real; the detection/scoring logic inside them is not.
@@ -45,23 +48,25 @@ Every file with a `TODO` is a placeholder — the shapes, wiring, and interfaces
 ## Local setup (no Docker)
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r governance_api/requirements.txt -r proxy/requirements.txt -r data_pipeline/requirements.txt -r detectors/requirements.txt
-pip install -e governance_sdk/
+uv venv && uv pip install -r requirements-dev.txt
+uv pip install -r governance_api/requirements.txt -r proxy/requirements.txt -r data_pipeline/requirements.txt -r detectors/requirements.txt
+uv pip install -e governance_sdk/
 
 cp .env.example .env   # then edit UPSTREAM_LLM_API_KEY etc.
-python scripts/init_db.py
+uv run scripts/init_db.py
 
-# in separate terminals:
-(cd governance_api && uvicorn main:app --port 8001 --reload)
-(cd proxy && uvicorn main:app --port 8000 --reload)
-(cd dashboard && python -m http.server 8080)   # open http://localhost:8080
+./run.sh   # starts api :8001, proxy :8000, dashboard :8080 (all via `uv run`)
 ```
 
-Then try the chat reference agent end-to-end:
+`run.sh` reads `WITH_BRIDGE` from `.env`: `0` is normal dev (above);
+`1` is bench mode — bridge on `:8080`, proxy skipped (the bench server
+needs `:8000`), dashboard moves to `:8081`. See [docs/BENCH_BRIDGE.md](docs/BENCH_BRIDGE.md).
+
+Then try a reference agent end-to-end:
 
 ```bash
-python examples/chat_interface.py
+uv run examples/chat_interface.py   # stateless REPL
+uv run examples/chat_memory.py      # same path + LangGraph-checkpoint memory
 ```
 
 ## Docker Compose (Postgres instead of SQLite)
@@ -125,7 +130,7 @@ All of this is backed by `governance_api/routes/admin.py` if you'd rather script
 
 Two Claude Code skills live in `.claude/skills/` for this project:
 
-- **`decision-logger`** — during any conversation about this codebase, if a design/architecture/scope decision is being made (a choice between alternatives, a scope cut, something hard to reverse), it asks whether that decision should be captured as an ADR (or elsewhere) before it's lost. All 5 ADRs in `docs/adr/` came out of exactly this kind of moment.
+- **`decision-logger`** — during any conversation about this codebase, if a design/architecture/scope decision is being made (a choice between alternatives, a scope cut, something hard to reverse), it asks whether that decision should be captured as an ADR (or elsewhere) before it's lost. The ADRs in `docs/adr/` came out of exactly this kind of moment.
 - **`dev-next-steps`** — tell it your role (SWE / Data Engineer / Data Scientist) and it reads [docs/PROGRESS.md](docs/PROGRESS.md), hands you your current task with the context you need to start, and — once you confirm it's done and working — checks it off and hands you the next one, keeping `PROGRESS.md` (and this README, when something structural changes) up to date as you go.
 
 ## Where each objective in the plan lands
@@ -135,8 +140,8 @@ Two Claude Code skills live in `.claude/skills/` for this project:
 | Reverse proxy, inbound/outbound compliance check | `proxy/main.py` |
 | `@governed_tool` / `@governed_node` decorators | `governance_sdk/governance_sdk/decorators.py` |
 | LangChain callback / LangGraph node wrapping | `governance_sdk/governance_sdk/integrations/` |
-| Trust score, monotonic reduction, delegation capping | `governance_api/authority/` |
-| Redact / block / hash / log-only actions | `governance_api/compliance/actions.py` |
+| Trust score, monotonic reduction, delegation capping | `governance_api/authority/` (session-scoped per [adr/0013](docs/adr/0013-session-scoped-trust-state.md)) |
+| Redact / block / hash / log-only actions | `governance_api/compliance/actions.py` (tool-result scans redact without charging score, [adr/0014](docs/adr/0014-tool-result-scans-dont-charge-score.md)) |
 | Hash-chained signed receipts | `governance_api/receipts/writer.py`, verified by `data_pipeline/ledger/verify_chain.py` |
 | HIPAA / DPDP identifier detectors + overlap map | `detectors/hipaa/`, `detectors/dpdp/`, `data_pipeline/config/overlap_map.yaml` |
 | Prompt-injection heuristics | `detectors/injection/heuristics.py` |
@@ -145,3 +150,5 @@ Two Claude Code skills live in `.claude/skills/` for this project:
 | Admin config (thresholds, pack actions, per-user_id override) | `governance_api/routes/admin.py`, `governance_api/access_control/`, `dashboard/admin.html` |
 | Latency benchmarking | `data_pipeline/benchmark/benchmark_latency.py` |
 | Automated tests + CI | `governance_api/tests/`, `detectors/tests/`, `.github/workflows/tests.yml` |
+| Memory chat (LangGraph checkpointer, still via proxy) | `examples/chat_memory.py` |
+| GuardRailBench hook-contract bridge | `bench_bridge/main.py`, [docs/BENCH_BRIDGE.md](docs/BENCH_BRIDGE.md) |

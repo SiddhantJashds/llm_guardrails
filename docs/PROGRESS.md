@@ -7,7 +7,15 @@ Legend: `[ ]` not started · `[~]` scaffolded (file/wiring exists, real logic st
 Before marking anything `[x]` that touches `shared/`, `authority/`, `compliance/`, `access_control/`, or a route: run `pytest` from the repo root ([docs/adr/0007](adr/0007-tests-and-ci-before-handoff.md)). It also runs automatically in CI on every push/PR.
 
 
-Last updated: 2026-10-08 (Data Engineer Day2 #8 done: latency benchmarking script ran against real upstream LLM, ~83ms overhead; benchmark_latency.py syntax fix applied. SWE#1 Day2 #10 done: proxy selects HIPAA/DPDP per request via `x-compliance-pack`.)
+Last updated: 2026-10-09 (bench integration: `bench_bridge/` serves the GuardRailBench hook contract — sample-edition scenarios 1, 4, 13 score 3/3 PASS; trust state re-keyed per (agent, session) [adr/0013]; tool-result scans redact without charging score [adr/0014]; `run.sh` is `.env`-driven via `WITH_BRIDGE`; `examples/chat_memory.py` adds LangGraph-checkpoint memory; `pytest` 176 passed + 1 xfailed.)
+
+## Bench bridge (cross-cutting, 2026-10-09)
+
+- [x] `bench_bridge/main.py` — 5 hook endpoints → `compliance-check`/`tool-check` (+ out-of-scope deny), fail-closed, seed-if-absent bench thresholds (low 50 / medium 60 / high 80); `scripts/check_contract.py` 5/5; full `run_all.py` 3/3 PASS (see [docs/BENCH_BRIDGE.md](BENCH_BRIDGE.md))
+- [x] Session-scoped trust — composite PK `(agent_id, session_id)`; same-session parent cap; regression test `test_scores_are_isolated_between_sessions` ([adr/0013](adr/0013-session-scoped-trust-state.md)); requires `governance.db` rebuild
+- [x] `apply_score` on `compliance-check` — tool-result scans redact + receipt, no penalty ([adr/0014](adr/0014-tool-result-scans-dont-charge-score.md)); SDK `check_compliance` passes it through
+- [x] `run.sh` — one-command startup, `WITH_BRIDGE` read from `.env` (never sourced), ordered boot (api → rest), proxy skipped + dashboard on `:8081` in bench mode
+- [x] `examples/chat_memory.py` — LangGraph `InMemorySaver` memory chat through the proxy (verified two-turn recall); `examples/rag_interface.py` model fixed to the served Qwen model; LangGraph demo catches its own `PermissionError` denial instead of tracebacking
 
 ## SWE #1 (Sauda) — Gateway & Integration Engineer
 

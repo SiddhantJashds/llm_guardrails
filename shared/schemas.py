@@ -25,6 +25,11 @@ class ComplianceCheckRequest(BaseModel):
     # envelope. Redaction is skipped only if this AND the user's stored
     # UserAccessOverride.allow_unredacted are both true (see docs/adr/0005).
     request_unredacted: bool = False
+    # False = redact + write the receipt, but don't touch the authority score.
+    # For tool-result scans: the PHI is in retrieved DATA the agent was
+    # authorized to see, not agent misbehavior -- penalizing it bricks
+    # legitimate read-then-use workflows (bench scenario 1 proved this).
+    apply_score: bool = True
 
 
 class ComplianceCheckResponse(BaseModel):

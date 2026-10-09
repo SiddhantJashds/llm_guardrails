@@ -45,10 +45,12 @@ class GovernanceClient:
     def check_tool(self, identity: dict, tool_id: str) -> dict:
         return self._post("/governance/tool-check", {"identity": identity, "tool_id": tool_id})
 
-    def check_compliance(self, identity: dict, text: str, direction: str, pack_id: str = "hipaa") -> dict:
+    def check_compliance(
+        self, identity: dict, text: str, direction: str, pack_id: str = "hipaa", apply_score: bool = True
+    ) -> dict:
         return self._post(
             "/governance/compliance-check",
-            {"identity": identity, "text": text, "direction": direction, "pack_id": pack_id},
+            {"identity": identity, "text": text, "direction": direction, "pack_id": pack_id, "apply_score": apply_score},
         )
 
     def check_handoff(self, identity: dict, output_text: str, pack_id: str = "hipaa") -> dict:

@@ -30,16 +30,18 @@ from receipts.writer import write_receipt
 router = APIRouter(prefix="/governance", tags=["governance"])
 
 
-def _apply_signals(engine: AuthorityEngine, agent_id: str, violations: list, injection_hits: list) -> None:
+def _apply_signals(
+    engine: AuthorityEngine, agent_id: str, session_id: str, violations: list, injection_hits: list
+) -> None:
     """Apply the PHI/PII signal and the injection signal independently -- each
     is its own evidence event (and its own authority-history entry), not a
     single merged one, so monotonic reduction stacks them correctly if both
     fire on the same text."""
     phi = phi_signal(violations)
     if phi:  # None if clean, or if every match is a NO_SIGNAL_IDENTIFIERS marker (e.g. consent_purpose_flag)
-        engine.apply_signal(agent_id, phi)
+        engine.apply_signal(agent_id, session_id, phi)
     if injection_hits:
-        engine.apply_signal(agent_id, "prompt_injection_detected")
+        engine.apply_signal(agent_id, session_id, "prompt_injection_detected")
 
 
 @router.post("/compliance-check", response_model=ComplianceCheckResponse)
@@ -56,10 +58,12 @@ def compliance_check(req: ComplianceCheckRequest, db: Session = Depends(get_db))
     # a rule-based signal, not a decision) -- it only costs authority score.
     injection_hits = detect_injection(req.text) if req.direction == "inbound" else []
 
-    if violations or injection_hits:
+    # apply_score=False (e.g. tool-result scans): redact + receipt, but leave
+    # the score alone -- and don't even create trust state for it.
+    if (violations or injection_hits) and req.apply_score:
         engine = AuthorityEngine(db)
         engine.get_or_create(req.identity.agent_id, req.identity.session_id, req.identity.parent_agent_id)
-        _apply_signals(engine, req.identity.agent_id, violations, injection_hits)
+        _apply_signals(engine, req.identity.agent_id, req.identity.session_id, violations, injection_hits)
 
     reason = ", ".join(violations) if violations else None
     if violations and allow_unredacted:
@@ -131,7 +135,7 @@ def handoff_check(req: HandoffCheckRequest, db: Session = Depends(get_db)):
     engine.get_or_create(req.identity.agent_id, req.identity.session_id, req.identity.parent_agent_id)
 
     if violations or injection_hits:
-        _apply_signals(engine, req.identity.agent_id, violations, injection_hits)
+        _apply_signals(engine, req.identity.agent_id, req.identity.session_id, violations, injection_hits)
 
     # Roll up all agents' scores in this session so the FINAL output can be
     # blocked even if no single agent alone breaches threshold -- if the

@@ -5,6 +5,7 @@
 // bullet and numbered lists, block quotes, horizontal rules, links
 // (http/https only), simple pipe tables, and redaction markers.
 import { escapeHtml } from "./api.js";
+import { decorateEntities } from "./ui.js";
 
 function inline(text) {
   let s = text;
@@ -14,7 +15,7 @@ function inline(text) {
     codes.push(c);
     return `\u0000${codes.length - 1}\u0000`;
   });
-  s = s.replace(/\[(REDACTED[^\]]*|HASH:[^\]]*)\]/g, (_, inner) => `<span class="redact">${inner}</span>`);
+  s = decorateEntities(s);
   s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/__([^_]+)__/g, "<strong>$1</strong>");
   s = s.replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>").replace(/(^|[^\w])_([^_\s][^_]*)_(?!\w)/g, "$1<em>$2</em>");
   s = s.replace(/~~([^~]+)~~/g, "<del>$1</del>");

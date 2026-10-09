@@ -33,11 +33,58 @@ export function statusChip(status) {
   return `<span class="chip chip--${cls}">${icon(name, "icon--xs")}${esc(label)}</span>`;
 }
 
+// One colour per kind of identifier, so a NAME is always blue, a PHONE always
+// orange, etc. -- in placeholders, chips and legends alike. Fixed order of the
+// validated categorical palette; rarer ID numbers share one colour.
+const KIND = {
+  full_name: ["NAME", 1], NAME: ["NAME", 1],
+  phone_number: ["PHONE", 2], fax_number: ["PHONE", 2], PHONE: ["PHONE", 2], FAX: ["PHONE", 2],
+  email_address: ["EMAIL", 3], web_url: ["EMAIL", 3], EMAIL: ["EMAIL", 3], URL: ["EMAIL", 3],
+  geographic_subdivision: ["LOCATION", 4], residential_address: ["LOCATION", 4], LOCATION: ["LOCATION", 4], ADDRESS: ["LOCATION", 4],
+  date_except_year: ["DATE", 5], DATE: ["DATE", 5],
+  medical_record_number: ["ID", 7], health_plan_beneficiary_number: ["ID", 7], account_number: ["ID", 7],
+  certificate_license_number: ["ID", 7], ssn_like: ["ID", 7], aadhaar_like: ["ID", 7], pan_like: ["ID", 7],
+  MRN: ["ID", 7], PLAN_ID: ["ID", 7], ACCOUNT: ["ID", 7], LICENSE: ["ID", 7], SSN: ["ID", 7], AADHAAR: ["ID", 7], PAN: ["ID", 7],
+  vehicle_identifier: ["DEVICE", 6], device_identifier: ["DEVICE", 6], VEHICLE: ["DEVICE", 6], DEVICE: ["DEVICE", 6],
+};
+
+export function kindOf(typeOrLabel) {
+  const k = KIND[typeOrLabel] || KIND[String(typeOrLabel).replace(/^injection:.*/, "")];
+  return k ? { kind: k[0], color: `var(--series-${k[1]})` } : { kind: "OTHER", color: "var(--neutral)" };
+}
+
+const entity = (label, typeKey, title) => {
+  const k = kindOf(typeKey);
+  return `<span class="ent" style="--c:${k.color}" title="${esc(title || label)}">${esc(label)}</span>`;
+};
+
 export function redactions(identifiers) {
   if (!identifiers || !identifiers.length) return "";
   return `<span class="redactions">${identifiers
-    .map((i) => `<span class="redact">${esc(i.type)}${i.count > 1 ? `<span class="redact__n">×${i.count}</span>` : ""}</span>`)
+    .map((i) => {
+      const k = kindOf(i.type);
+      return `<span class="ent" style="--c:${k.color}" title="${esc(i.type)}">${esc(i.type)}${i.count > 1 ? `<span class="ent__n">×${i.count}</span>` : ""}</span>`;
+    })
     .join("")}</span>`;
+}
+
+/** Legend of identifier kinds present in a list of identifier types. */
+export function kindLegend(types) {
+  const seen = new Map();
+  for (const t of types) {
+    const k = kindOf(t);
+    if (!seen.has(k.kind)) seen.set(k.kind, k.color);
+  }
+  return [...seen].map(([kind, color]) => `<span class="legend__item"><span class="legend__swatch" style="background:${color}"></span>${esc(kind.toLowerCase())}</span>`).join("");
+}
+
+/** Placeholders and masks inside already-escaped text -> coloured entities. */
+export function decorateEntities(escaped) {
+  return escaped
+    .replace(/\[([A-Z][A-Z_]*?)_(\d+)\]/g, (m, label, n) => entity(`${label} ${n}`, label, `${m}: ${label.toLowerCase()} #${n}, the model never saw the real value`))
+    .replace(/\[REDACTED_([A-Z_]+)\]/g, (m, label) => entity(`${label} redacted`, label, m))
+    .replace(/\[HASH:([0-9a-f]+)\]/g, (m, h) => `<span class="ent ent--hash" title="${esc(m)}: one-way hash">#${esc(h)}</span>`)
+    .replace(/\[REDACTED\]/g, () => `<span class="ent" style="--c:var(--neutral)">redacted</span>`);
 }
 
 export function meter(score, { threshold = DEFAULT_THRESHOLD } = {}) {
@@ -71,7 +118,7 @@ export function chainOkCell(ok) {
 
 /** Escape text, then show redaction markers ([REDACTED], [HASH:…]) as redaction bars. */
 export function renderText(text) {
-  return esc(text).replace(/\[(REDACTED[^\]]*|HASH:[^\]]*)\]/g, (_, inner) => `<span class="redact">${inner}</span>`);
+  return decorateEntities(esc(text));
 }
 
 export function short(value) {

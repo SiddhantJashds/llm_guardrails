@@ -31,8 +31,8 @@ function session(caseId) {
     id,
     user,
     ident,
-    compliance: (text, { agent, parent, direction = "inbound", pack = "hipaa", applyScore = true, unredacted = false } = {}) =>
-      call("/governance/compliance-check", { identity: ident(agent, parent), text, direction, pack_id: pack, apply_score: applyScore, request_unredacted: unredacted }),
+    compliance: (text, { agent, parent, direction = "inbound", pack = "hipaa", applyScore = true, unredacted = false, restoreToSender = false } = {}) =>
+      call("/governance/compliance-check", { identity: ident(agent, parent), text, direction, pack_id: pack, apply_score: applyScore, request_unredacted: unredacted, restore_to_sender: restoreToSender }),
     tool: (toolId, { agent, parent } = {}) => call("/governance/tool-check", { identity: ident(agent, parent), tool_id: toolId }),
     handoff: (text, { agent, parent, pack = "hipaa" } = {}) => call("/governance/handoff-check", { identity: ident(agent, parent), output_text: text, pack_id: pack }),
     detail: () => call(`/dashboard/session/${encodeURIComponent(id)}`),
@@ -41,11 +41,13 @@ function session(caseId) {
 
 const check = (label, pass, detail = "") => ({ label, pass: Boolean(pass), detail });
 
-async function proxyPost(ctx, sessionId, userId, messages, pack = "hipaa") {
+async function proxyPost(ctx, sessionId, userId, messages, pack = "hipaa", restoreToSender = false) {
   const cfg = await ctx.getJSON("/dashboard/config");
+  const headers = { "content-type": "application/json", "x-user-id": userId, "x-session-id": sessionId, "x-agent-id": "demo_chat", "x-compliance-pack": pack };
+  if (restoreToSender) headers["x-restore-to-sender"] = "true";
   const resp = await fetch(`${cfg.proxy_url.replace(/\/+$/, "")}/v1/chat/completions`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-user-id": userId, "x-session-id": sessionId, "x-agent-id": "demo_chat", "x-compliance-pack": pack },
+    headers,
     body: JSON.stringify({ model: cfg.chat_model, messages }),
   });
   return { status: resp.status, body: await resp.json().catch(() => ({})) };
@@ -56,6 +58,7 @@ export const GROUPS = [
   { id: "redact", title: "Redacted", outcome: "redact" },
   { id: "block", title: "Blocked", outcome: "block" },
   { id: "deny", title: "Denied", outcome: "deny" },
+  { id: "redaction_views", title: "Redaction views", outcome: "redact" },
   { id: "edge", title: "Edge cases", outcome: null },
   { id: "model", title: "Model-backed", outcome: null },
 ];
@@ -234,6 +237,140 @@ export const CASES = [
       return { sessionId: s.id, checks: [check("Handoff denied", r.allowed === false, r.reason || ""), check("Reason is the session-level block", (r.reason || "").includes("session-level"), r.reason || "")] };
     },
   },
+  // ---------------- Redaction views ----------------
+  {
+    id: "views_stable_placeholders", group: "redaction_views", title: "Placeholders stay stable: NAME_1 vs NAME_2",
+    description: "Each distinct entity receives a stable typed placeholder within the session. Placeholders persist across turns.",
+    async run() {
+      const s = session(this.id);
+      const r1 = await s.compliance("Dr. Alex Morgan consulted with patient John Carter.");
+      const r2 = await s.compliance("Dr. Alex Morgan completed the notes.");
+      return {
+        sessionId: s.id,
+        checks: [
+          check("First entity assigned [NAME_1]", r1.model_text.includes("[NAME_1]"), r1.model_text),
+          check("Second entity assigned [NAME_2]", r1.model_text.includes("[NAME_2]"), r1.model_text),
+          check("First entity stays [NAME_1] in later turn", r2.model_text.includes("[NAME_1]"), r2.model_text),
+        ],
+      };
+    },
+  },
+  {
+    id: "views_restore_to_sender", group: "redaction_views", title: "The sender's own name is restored in the reply",
+    description: "Inbound prompt with restore_to_sender, then outbound reply. The reply reveals the sender's own value.",
+    async run() {
+      const s = session(this.id);
+      const r1 = await s.compliance("Hello, my name is Alex Morgan.", { direction: "inbound", restoreToSender: true });
+      const r2 = await s.compliance("Hello, [NAME_1]!", { direction: "outbound", restoreToSender: true });
+      return {
+        sessionId: s.id,
+        checks: [
+          check("Inbound replaces name with [NAME_1]", r1.model_text.includes("[NAME_1]"), r1.model_text),
+          check("Outbound model text keeps [NAME_1]", r2.model_text.includes("[NAME_1]"), r2.model_text),
+          check("Outbound display text restores sender name", r2.display_text.includes("Alex Morgan"), r2.display_text),
+        ],
+      };
+    },
+  },
+  {
+    id: "views_no_restore_without_opt_in", group: "redaction_views", title: "No restore without opt-in (RAG context)",
+    description: "Without x-restore-to-sender (e.g. RAG context), placeholders are never restored into replies.",
+    async run() {
+      const s = session(this.id);
+      const r1 = await s.compliance("Retrieved context: patient Alex Morgan diagnosed with diabetes.", { direction: "inbound", restoreToSender: false });
+      const r2 = await s.compliance("The patient is [NAME_1].", { direction: "outbound", restoreToSender: false });
+      return {
+        sessionId: s.id,
+        checks: [
+          check("Inbound replaces name with [NAME_1]", r1.model_text.includes("[NAME_1]"), r1.model_text),
+          check("Outbound model text keeps placeholder", r2.model_text.includes("[NAME_1]"), r2.model_text),
+          check("Display text keeps placeholder without opt-in", r2.display_text.includes("[NAME_1]") && !r2.display_text.includes("Alex Morgan"), r2.display_text),
+        ],
+      };
+    },
+  },
+  {
+    id: "views_clinician_with_ask", group: "redaction_views", title: "Clinician with the ask sees full name and partial phone",
+    description: "Clinician role with explicit unredacted ask: full name is revealed and phone is partially masked. Role unassigned afterwards.",
+    async run() {
+      const s = session(this.id);
+      await put(`/admin/user-roles/${encodeURIComponent(s.user)}`, { role_id: "clinician" });
+      try {
+        const r = await s.compliance("Patient Alex Morgan, phone (555) 201-7788.", { direction: "outbound", unredacted: true });
+        return {
+          sessionId: s.id,
+          checks: [
+            check("Model sees placeholders", r.model_text.includes("[NAME_1]") && r.model_text.includes("[PHONE_1]"), r.model_text),
+            check("Clinician sees full name", r.display_text.includes("Alex Morgan"), r.display_text),
+            check("Clinician sees partial phone", r.display_text.includes("7788") && !r.display_text.includes("201"), r.display_text),
+          ],
+        };
+      } finally {
+        await put(`/admin/user-roles/${encodeURIComponent(s.user)}`, { role_id: null });
+      }
+    },
+  },
+  {
+    id: "views_clinician_without_ask", group: "redaction_views", title: "Clinician without the ask sees placeholders",
+    description: "A clinician who does not explicitly ask for unredacted output receives standard placeholders.",
+    async run() {
+      const s = session(this.id);
+      await put(`/admin/user-roles/${encodeURIComponent(s.user)}`, { role_id: "clinician" });
+      try {
+        const r = await s.compliance("Patient Alex Morgan, phone (555) 201-7788.", { direction: "outbound", unredacted: false });
+        return {
+          sessionId: s.id,
+          checks: [
+            check("Model sees placeholders", r.model_text.includes("[NAME_1]") && r.model_text.includes("[PHONE_1]"), r.model_text),
+            check("Display text keeps placeholders without ask", r.display_text.includes("[NAME_1]") && r.display_text.includes("[PHONE_1]"), r.display_text),
+            check("No raw name shown", !r.display_text.includes("Alex Morgan"), r.display_text),
+          ],
+        };
+      } finally {
+        await put(`/admin/user-roles/${encodeURIComponent(s.user)}`, { role_id: null });
+      }
+    },
+  },
+  {
+    id: "views_auditor_sees_nothing", group: "redaction_views", title: "Auditor sees nothing even with the ask",
+    description: "The auditor role caps all identifiers at hidden: even with x-request-unredacted: true, placeholders remain.",
+    async run() {
+      const s = session(this.id);
+      await put(`/admin/user-roles/${encodeURIComponent(s.user)}`, { role_id: "auditor" });
+      try {
+        const r = await s.compliance("Patient Alex Morgan, phone (555) 201-7788.", { direction: "outbound", unredacted: true });
+        return {
+          sessionId: s.id,
+          checks: [
+            check("Auditor sees placeholders with unredacted request", r.display_text.includes("[NAME_1]") && r.display_text.includes("[PHONE_1]"), r.display_text),
+            check("No raw values revealed", !r.display_text.includes("Alex Morgan") && !r.display_text.includes("201-7788"), r.display_text),
+          ],
+        };
+      } finally {
+        await put(`/admin/user-roles/${encodeURIComponent(s.user)}`, { role_id: null });
+      }
+    },
+  },
+  {
+    id: "views_partial_style_rule", group: "redaction_views", title: "Partial style rule masks model text",
+    description: "Configures phone_number to partial style (keep last 4). The model sees only the masked number. Policy restored afterwards.",
+    async run() {
+      const s = session(this.id);
+      await put("/admin/identifier-policy/hipaa/phone_number", { style: "partial", keep_last: 4 });
+      try {
+        const r = await s.compliance("Please call the clinic at (555) 201-7788.");
+        return {
+          sessionId: s.id,
+          checks: [
+            check("Model sees partial mask", r.model_text.includes("7788") && !r.model_text.includes("201"), r.model_text),
+            check("Raw phone not exposed", !r.model_text.includes("(555) 201-7788"), r.model_text),
+          ],
+        };
+      } finally {
+        await put("/admin/identifier-policy/hipaa/phone_number", { style: "token", keep_last: 4, restore_to_sender: true, applies_to: "both" });
+      }
+    },
+  },
   // ---------------- Edge cases ----------------
   {
     id: "edge_zero_width", group: "edge", title: "Hidden characters can't disguise an injection",
@@ -306,10 +443,18 @@ export const CASES = [
     needs: "proxy", usesModel: true,
     async run(ctx) {
       const s = session(this.id);
-      const { status, body } = await proxyPost(ctx, s.id, s.user, [{ role: "user", content: "My name is Priya Raman and my number is (555) 640-2211. Greet me by name." }]);
+      const { status, body } = await proxyPost(ctx, s.id, s.user, [{ role: "user", content: "My name is Priya Raman and my number is (555) 640-2211. Greet me by name." }], "hipaa", true);
       const d = await s.detail();
       const first = d.conversation[0] || {};
-      return { sessionId: s.id, checks: [check("Reply received", status === 200 && body.choices, String(status)), check("Prompt redacted before the model", first.text && !first.text.includes("640-2211"), first.text || "no text stored"), check("Reply contains no raw phone", !JSON.stringify(body).includes("640-2211"))] };
+      return {
+        sessionId: s.id,
+        checks: [
+          check("Reply received", status === 200 && body.choices, String(status)),
+          check("Prompt redacted before the model", first.text && !first.text.includes("640-2211"), first.text || "no text stored"),
+          check("Prompt in conversation contains placeholder", first.text && first.text.includes("[NAME_1]"), first.text || ""),
+          check("Reply contains no raw phone", !JSON.stringify(body).includes("640-2211")),
+        ],
+      };
     },
   },
   {

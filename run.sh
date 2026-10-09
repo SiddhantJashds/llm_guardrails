@@ -34,12 +34,37 @@ fi
 
 mkdir -p logs
 
+# Stop every process this script started, including grandchildren
+# (`uv run` -> python). PIDs are recorded as each service starts: `jobs -p`
+# returns nothing inside $(...) or a pipe under dash (/bin/sh on Ubuntu), so
+# the old cleanup silently killed nothing and left servers holding ports.
+PIDS=""
+kill_tree() {
+  for child in $(pgrep -P "$1" 2>/dev/null); do
+    kill_tree "$child"
+  done
+  kill "$1" 2>/dev/null || true
+}
+
 cleanup() {
+  trap - INT TERM EXIT
   echo ""
   echo "== stopping all services... =="
-  jobs -p | xargs -r kill 2>/dev/null || true
+  for pid in $PIDS; do
+    kill_tree "$pid"
+  done
 }
 trap cleanup INT TERM EXIT
+
+# Warn (don't fail) when a port is already taken -- usually a previous
+# run.sh that is still running, whose services would keep serving old code.
+for port in 8001 "$PROXY_PORT" "$DASH_PORT" 8080 8000; do
+  if [ "$port" = "8080" ] && [ "$WITH_BRIDGE" != "1" ]; then continue; fi
+  if [ "$port" = "8000" ] && [ "$WITH_BRIDGE" != "1" ]; then continue; fi
+  if command -v ss >/dev/null 2>&1 && ss -ltn 2>/dev/null | grep -q ":$port "; then
+    echo "WARN port :$port is already in use -- stop the previous run.sh (or that process) first, or it keeps serving old code" >&2
+  fi
+done
 
 wait_for() {
   url="$1"; name="$2"
@@ -58,6 +83,7 @@ wait_for() {
 
 echo "== starting governance_api :8001 =="
 (cd governance_api && PROXY_PUBLIC_URL="http://localhost:$PROXY_PORT" uv run uvicorn main:app --port 8001 --reload) > logs/governance_api.log 2>&1 &
+PIDS="$PIDS $!"
 # governance_api loads the NER model at startup -- everything else waits for
 # it so seeding/health checks don't race it.
 wait_for http://localhost:8001/healthz governance_api
@@ -67,11 +93,14 @@ else
   echo "== starting proxy :$PROXY_PORT =="
 fi
 (cd proxy && uv run uvicorn main:app --port "$PROXY_PORT" --reload) > logs/proxy.log 2>&1 &
+PIDS="$PIDS $!"
 echo "== starting dashboard :$DASH_PORT =="
 (cd dashboard && uv run python -m http.server "$DASH_PORT") > logs/dashboard.log 2>&1 &
+PIDS="$PIDS $!"
 if [ "$WITH_BRIDGE" = "1" ]; then
   echo "== starting bench_bridge :8080 =="
   (cd bench_bridge && uv run uvicorn main:app --port 8080 --reload) > logs/bench_bridge.log 2>&1 &
+  PIDS="$PIDS $!"
 fi
 # Bench mode also starts the GuardRailBench sample apps on :8000 when that repo
 # sits next to this one, so the dashboard's test console can run the
@@ -83,6 +112,7 @@ if [ "$WITH_BRIDGE" = "1" ] && [ -f "$BENCH_DIR/server.py" ] && [ -x "$BENCH_DIR
   BENCH_APP=1
   echo "== starting GuardRailBench apps :8000 (test console) =="
   (cd "$BENCH_DIR" && .venv/bin/python -m uvicorn server:app --port 8000 --workers 1) > logs/bench_app.log 2>&1 &
+  PIDS="$PIDS $!"
 fi
 
 echo "logs: logs/governance_api.log logs/proxy.log logs/dashboard.log"

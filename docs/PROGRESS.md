@@ -15,7 +15,7 @@ Last updated: 2026-10-09 (bench integration: `bench_bridge/` serves the GuardRai
 - [x] `bench_bridge/main.py` — 5 hook endpoints → `compliance-check`/`tool-check` (+ out-of-scope deny), fail-closed, seed-if-absent bench thresholds (low 50 / medium 60 / high 80); `scripts/check_contract.py` 5/5; full `run_all.py` 3/3 PASS (see [docs/BENCH_BRIDGE.md](BENCH_BRIDGE.md))
 - [x] Session-scoped trust — composite PK `(agent_id, session_id)`; same-session parent cap; regression test `test_scores_are_isolated_between_sessions` ([adr/0013](adr/0013-session-scoped-trust-state.md)); requires `governance.db` rebuild
 - [x] `apply_score` on `compliance-check` — tool-result scans redact + receipt, no penalty ([adr/0014](adr/0014-tool-result-scans-dont-charge-score.md)); SDK `check_compliance` passes it through
-- [x] `run.sh` — one-command startup, `WITH_BRIDGE` read from `.env` (never sourced), ordered boot (api → rest), proxy skipped + dashboard on `:8081` in bench mode
+- [x] `run.sh` — one-command startup, `WITH_BRIDGE` read from `.env` (never sourced), ordered boot (api → rest), proxy on `:8002` + dashboard on `:8081` in bench mode
 - [x] `examples/chat_memory.py` — LangGraph `InMemorySaver` memory chat through the proxy (verified two-turn recall); `examples/rag_interface.py` model fixed to the served Qwen model; LangGraph demo catches its own `PermissionError` denial instead of tracebacking
 
 ## SWE #1 (Sauda) — Gateway & Integration Engineer

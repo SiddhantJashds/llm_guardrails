@@ -40,8 +40,10 @@ noise, so higher lines brick legitimate reads and the reminder email itself
 ## Running it
 
 `WITH_BRIDGE=1` in `.env`, then `./run.sh` from the repo root: bridge on
-`:8080`, proxy skipped (the bench server needs `:8000`; bench apps call the
-LLM directly), dashboard moves to `:8081`. Flip back to `0` afterwards.
+`:8080`, proxy moves to `:8002` (the bench server needs `:8000`; bench apps call
+the LLM directly), dashboard moves to `:8081`. To chat through the proxy in this
+mode, run examples with `PROXY_URL=http://localhost:8002/v1/chat/completions`.
+Flip back to `0` afterwards.
 
 ```bash
 # llm_guardrails/

@@ -143,3 +143,52 @@ def test_injection_and_phi_stack_as_independent_signals(bridge_client, gov_clien
     ).json()
     assert "123-45-6789" not in resp["prompt"]  # SSN never survives; injection alone never gates the verdict
     assert _tool_score(gov_client, hook)["current_score"] == 55.0  # -25 injection, -20 PHI
+
+
+def test_completion_hook_records_token_usage(bridge_client):
+    from shared.db import SessionLocal
+    from shared.models import TokenUsageEvent
+
+    bridge_client.post(
+        "/api/v1/on_completion_received",
+        json={**make_hook(), "completion": "hi", "prompt_tokens": 12, "completion_tokens": 34, "latency_ms": 1},
+    )
+    db = SessionLocal()
+    try:
+        rows = db.query(TokenUsageEvent).all()
+    finally:
+        db.close()
+    assert [(r.user_id, r.session_id, r.agent_id, r.tokens_in, r.tokens_out) for r in rows] == [
+        ("alice", "sess1", "data_agent", 12, 34)
+    ]
+
+
+def test_token_ingest_failure_never_changes_hook_response(bridge_client, monkeypatch):
+    def boom(*args, **kwargs):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(bridge_client.module, "ingest_event", boom)
+    resp = bridge_client.post(
+        "/api/v1/on_completion_received",
+        json={**make_hook(), "completion": "hi", "prompt_tokens": 1, "completion_tokens": 1, "latency_ms": 1},
+    )
+    assert resp.status_code == 200 and set(resp.json()) == {"completion"}
+
+
+def test_live_feed_records_cleaned_text_and_out_of_scope_denies(bridge_client):
+    base = make_hook(session_id="sess_live")
+    bridge_client.post("/api/v1/on_prompt_received", json={**base, "prompt": "Call (555) 201-7788 now"})
+    bridge_client.post("/api/v1/on_tool_call", json={**base, "tool_name": "delete_file", "tool_args": {}, "tool_risk": "high", "agent_allowed_tools": []})
+    feed = bridge_client.get("/live/events").json()
+    mine = [e for e in feed["events"] if e["session_id"] == "sess_live"]
+    assert [e["hook"] for e in mine] == ["on_prompt_received", "on_tool_call"]
+    assert mine[0]["outcome"] == "redact" and "201-7788" not in mine[0]["text"]
+    assert mine[1]["outcome"] == "deny" and mine[1]["tool"] == "delete_file"
+    assert bridge_client.get(f"/live/events?after={mine[0]['seq']}").json()["events"][0]["hook"] == "on_tool_call"
+
+
+def test_live_feed_cors_allows_dashboard_reads_only(bridge_client):
+    ok = bridge_client.get("/live/events", headers={"Origin": "http://localhost:8081"})
+    assert ok.headers.get("access-control-allow-origin") == "http://localhost:8081"
+    pre = bridge_client.options("/api/v1/on_tool_call", headers={"Origin": "http://localhost:8081", "Access-Control-Request-Method": "POST"})
+    assert pre.status_code == 400

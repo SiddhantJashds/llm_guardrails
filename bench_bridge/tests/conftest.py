@@ -77,4 +77,6 @@ def bridge_client(gov_client):
 
     bridge = _load_bridge_main()
     bridge.gov = GovernanceClient(client=gov_client)
-    return TestClient(bridge.app)
+    client = TestClient(bridge.app)
+    client.module = bridge  # lets tests monkeypatch module globals (e.g. ingest_event)
+    return client

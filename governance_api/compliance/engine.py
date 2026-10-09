@@ -49,10 +49,23 @@ def _get_detector(pack_id: str):
 
 
 def _run_detectors(text: str, pack_id: str) -> List[Tuple[str, str]]:
-    """Return [(identifier_name, matched_span), ...] found in `text`."""
+    """Return [(identifier_name, matched_span), ...] found in `text`.
+
+    DECISION_MODE (detectors/decision/) selects the backend: `ner` runs the
+    classic regex+spaCy pack detector; `laya`/`cascade` delegate to the
+    decision-model router, which calls back into the same pack detector for
+    its ner leg -- so pack edits are picked up automatically, no duplication.
+    """
     detector = _get_detector(pack_id)
     if detector is None:
         return []
+    try:
+        from detectors.decision.router import get_mode as _decision_mode
+        if _decision_mode() != "ner":
+            from detectors.decision.router import find_all as _decision_find_all
+            return _decision_find_all(text, pack_id, detector)
+    except ImportError:
+        pass  # decision package absent (e.g. partial checkout): classic path
     return detector(text)
 
 

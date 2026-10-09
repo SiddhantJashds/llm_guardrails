@@ -86,7 +86,16 @@ def build_graph():
 def run_demo() -> None:
     compiled = build_graph()
     print(f"session_id: {SESSION_ID}")
-    result = compiled.invoke({"user_id": "demo_user"})
+    try:
+        result = compiled.invoke({"user_id": "demo_user"})
+    except PermissionError as e:
+        print(f"[denied] {e}")
+        print(
+            "note: sql_agent's PHI leak above was caught by its handoff-check "
+            "(costing its authority score) -- check governance_api's "
+            "/dashboard/session/{session_id} for the per-agent breakdown."
+        )
+        return
     print(f"final state: {result}")
     print(
         "note: sql_agent's PHI leak above was caught by its handoff-check "

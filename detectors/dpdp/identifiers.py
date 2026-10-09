@@ -1,8 +1,14 @@
 """DPDP (India) pack detectors -- general-PII identifiers, distinct from
 HIPAA's healthcare focus (docs/HACKATHON_PLAN.md, Data Scientist Day2 #5).
-Shares `phone_number`/`email_address` with the HIPAA pack -- see
-data_pipeline/config/overlap_map.yaml -- reuse detectors/hipaa/identifiers.py
-for those instead of re-implementing them here.
+Shares `phone_number`/`email_address`/`web_url`/`ip_address` with the HIPAA
+pack -- see data_pipeline/config/overlap_map.yaml -- reuse
+detectors/hipaa/identifiers.py for those instead of re-implementing them here.
+Other HIPAA-pack identifiers (medical_record_number, account_number,
+certificate_license_number, device_identifier, health_plan_beneficiary_number,
+date_except_year, ...) are deliberately NOT reused here -- DPDP has no
+healthcare-record framing and the generic "government ID / bank / payment /
+employment / education / financial" categories in India's DPDP personal-data
+definition don't match those detectors' keyword assumptions; see docs/adr/0016.
 
 `full_name` / `residential_address` are NER-derived and a low-confidence tier,
 same as HIPAA's `full_name` / `geographic_subdivision` (docs/adr/0008).
@@ -20,6 +26,8 @@ from detectors.hipaa.identifiers import PATTERNS as HIPAA_PATTERNS
 PATTERNS = {
     "phone_number": HIPAA_PATTERNS["phone_number"],
     "email_address": HIPAA_PATTERNS["email_address"],
+    "web_url": HIPAA_PATTERNS["web_url"],
+    "ip_address": HIPAA_PATTERNS["ip_address"],
     "aadhaar_like": re.compile(r"\b\d{4}\s?\d{4}\s?\d{4}\b"),
     "pan_like": re.compile(r"\b[A-Z]{5}\d{4}[A-Z]\b"),
 }

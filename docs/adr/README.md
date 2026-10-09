@@ -30,3 +30,4 @@ If you're not sure whether something rises to that bar, ask — or use the `deci
 | [0014](0014-tool-result-scans-dont-charge-score.md) | Tool-result scans redact but don't charge score | Accepted |
 | [0015](0015-governance-console.md) | Governance console: vendored assets, live profiles, redacted conversation capture | Accepted |
 | [0016](0016-redaction-redesign.md) | Redaction redesign: stable placeholders, sender restoration, and role-capped views | Accepted |
+| [0017](0016-dpdp-coverage-audit-and-web-url-ip-reuse.md) | DPDP coverage audit: reuse `web_url`/`ip_address` from HIPAA, rest stays out of scope | Accepted |

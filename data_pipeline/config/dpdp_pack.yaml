@@ -16,6 +16,10 @@ identifiers:
     action: redact
   - name: email_address
     action: redact
+  - name: web_url # added 2026-10-09 (docs/adr/0016) -- reused from HIPAA, see overlap_map.yaml
+    action: redact
+  - name: ip_address # added 2026-10-09 (docs/adr/0016) -- reused from HIPAA, see overlap_map.yaml
+    action: redact
   - name: aadhaar_like # Indian national ID pattern
     action: block
   - name: pan_like # Indian tax ID pattern

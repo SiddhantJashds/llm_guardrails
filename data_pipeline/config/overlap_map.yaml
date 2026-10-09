@@ -5,6 +5,8 @@ shared:
   - full_name
   - phone_number # DPDP also adds a bare-10-digit-starting-6-9 rule on top (Indian mobiles)
   - email_address
+  - web_url # added 2026-10-09 (docs/adr/0016) -- was HIPAA-only despite being generic, not healthcare-specific
+  - ip_address # added 2026-10-09 (docs/adr/0016) -- same reasoning as web_url
   - address # HIPAA's geographic_subdivision <-> DPDP's residential_address (DPDP also adds
             # street/PIN-code regex on top of the shared city/county NER layer)
 pack_specific:

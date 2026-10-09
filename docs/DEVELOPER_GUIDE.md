@@ -52,7 +52,8 @@ There's no dedicated reviewer watching this repo during the build, so a few smal
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `sqlite3.OperationalError: no such column` / table mismatch after pulling | Someone changed `shared/models.py`; your local `governance.db` predates it (see [Conventions](#3-conventions-worth-knowing-before-you-fight-them) above) | `rm governance.db && python scripts/init_db.py` |
+| `sqlite3.OperationalError: no such column` / table mismatch after pulling | Someone changed `shared/models.py`; your local `governance.db` predates it (see [Conventions](#3-conventions-worth-knowing-before-you-fight-them) above) | `python scripts/init_db.py` (auto-migrates known structural changes); if that doesn't clear it, `rm governance.db && python scripts/init_db.py` |
+| `UNIQUE constraint failed: agent_trust_state.agent_id` (HTTP 500 from the API, "Failed to fetch" in the test console) | `governance.db` was created before `agent_trust_state` got its composite `(agent_id, session_id)` PK — `create_all()` never alters existing tables | `python scripts/init_db.py` — the migration step now detects and repairs this automatically |
 | `ModuleNotFoundError: No module named 'shared'` (or `authority`, `compliance`, ...) | You ran `uvicorn` or a script from the wrong directory | `governance_api/` and `proxy/` are meant to be run with `cd <that dir> && uvicorn main:app --port ...` — see README's "Local setup" |
 | Dashboard page loads but tables never populate, browser console shows a CORS error | You're on a version before `governance_api/main.py`'s `CORSMiddleware` was added, or `GOVERNANCE_API_BASE_URL` in `dashboard/static/js/api.js` points somewhere the browser can't reach | Pull latest; check the URL matches where `governance_api` is actually running |
 | `pytest` fails immediately on collection with an import error | Usually a stale `.venv` missing a new dependency | `pip install -r requirements-dev.txt` again |

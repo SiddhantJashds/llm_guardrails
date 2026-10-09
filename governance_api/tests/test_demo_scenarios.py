@@ -5,8 +5,8 @@ plus one adversarial prompt-injection case per pack.
 Scope note: this validates the GOVERNANCE_API-LEVEL pipeline (detectors ->
 compliance engine -> authority engine -> receipt) that the Data Scientist
 owns. "Wired through both the LangChain single-agent and LangGraph
-multi-agent paths" (the full plan wording) additionally needs SWE#1's Day1 #6
-/ Day2 #7 reference flows, which aren't done yet -- see docs/PROGRESS.md.
+multi-agent paths" (the full plan wording) is `examples/demo_scenarios.py`
+(SWE#1 Day2 #11), which runs these same scenarios through the real SDK paths.
 Each test below is one coherent story on a single fresh agent, run twice
 (once per pack) rather than four unrelated probes, so it reads the way the
 actual demo would run.

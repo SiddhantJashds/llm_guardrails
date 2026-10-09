@@ -6,6 +6,7 @@ Legend: `[ ]` not started · `[~]` scaffolded (file/wiring exists, real logic st
 
 Before marking anything `[x]` that touches `shared/`, `authority/`, `compliance/`, `access_control/`, or a route: run `pytest` from the repo root ([docs/adr/0007](adr/0007-tests-and-ci-before-handoff.md)). It also runs automatically in CI on every push/PR.
 
+Last updated: 2026-10-09 (Data Engineer Day2 #5 done: proxy calls ingest_event from upstream response; .env DATABASE_URL fix applied.)
 
 Last updated: 2026-10-09 (bench integration: `bench_bridge/` serves the GuardRailBench hook contract — sample-edition scenarios 1, 4, 13 score 3/3 PASS; trust state re-keyed per (agent, session) [adr/0013]; tool-result scans redact without charging score [adr/0014]; `run.sh` is `.env`-driven via `WITH_BRIDGE`; `examples/chat_memory.py` adds LangGraph-checkpoint memory; `pytest` 176 passed + 1 xfailed.)
 
@@ -60,7 +61,7 @@ Last updated: 2026-10-09 (bench integration: `bench_bridge/` serves the GuardRai
 - [x] 4. End-of-day check: ledger accepts writes, chain-verify runs clean — verified 2026-09-28
 
 **Day 2**
-- [~] 5. Token-usage ingestion pipeline — `ingest_event` exists; proxy doesn't call it yet (see MOCKED_VS_PRODUCTION.md)
+- [x] 5. Token-usage ingestion pipeline — proxy calls `ingest_event` with tokens_in/tokens_out from upstream response; verified with real DB row
 - [x] 6. User profile aggregation job — `user_profile_job.py` now uses the Data Scientist's real formulas ([docs/adr/0011](adr/0011-composite-rating-and-effective-use-formulas.md)); unit+integration-tested
 - [x] 7. HIPAA↔DPDP overlap mapping (`data_pipeline/config/overlap_map.yaml`)
 - [x] 8. Latency/overhead benchmarking — script ran against real upstream LLM, produced before/after timing (0.341s direct vs 0.424s proxied, ~83ms overhead)

@@ -7,12 +7,12 @@ Memory model: one LangGraph thread per conversation. `MessagesState`'s
 node sends the FULL history to the proxy, so governance still scans
 everything and the upstream model sees prior turns.
 
-Run: `uv run examples/chat_memory.py` (with proxy on :8000).
+Run: `uv run examples/chat_memory.py` (with the proxy running -- the URL comes
+from example_config.py, which follows WITH_BRIDGE in .env).
 Caveat: `InMemorySaver` is process-local -- restart the script and the
 history is gone. Production would swap in a Postgres/Redis checkpointer;
 the node and REPL stay the same.
 """
-import os
 import uuid
 
 import httpx
@@ -20,8 +20,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, MessagesState, StateGraph
 
-PROXY_URL = os.getenv("PROXY_URL", "http://localhost:8000/v1/chat/completions")
-MODEL = os.getenv("CHAT_MODEL", "nvidia/Qwen3.6-35B-A3B-NVFP4")
+from example_config import DEFAULT_USER_ID, MODEL, PROXY_URL
 
 _ROLE_MAP = {"human": "user", "ai": "assistant", "system": "system"}
 
@@ -59,7 +58,7 @@ def build_chat_graph(user_id: str, session_id: str):
 
 
 def main() -> None:
-    user_id = input("user_id [demo_user]: ").strip() or "demo_user"
+    user_id = input(f"user_id [{DEFAULT_USER_ID}]: ").strip() or DEFAULT_USER_ID
     session_id = f"sess_{uuid.uuid4().hex[:8]}"
     chat = build_chat_graph(user_id, session_id)
     config = {"configurable": {"thread_id": session_id}}

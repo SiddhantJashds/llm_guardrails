@@ -41,9 +41,9 @@ noise, so higher lines brick legitimate reads and the reminder email itself
 
 `WITH_BRIDGE=1` in `.env`, then `./run.sh` from the repo root: bridge on
 `:8080`, proxy moves to `:8002` (the bench server needs `:8000`; bench apps call
-the LLM directly), dashboard moves to `:8081`. To chat through the proxy in this
-mode, run examples with `PROXY_URL=http://localhost:8002/v1/chat/completions`.
-Flip back to `0` afterwards.
+the LLM directly), dashboard moves to `:8081`. The examples pick up `:8002`
+automatically (`examples/example_config.py` reads `WITH_BRIDGE`); set `PROXY_URL`
+to override. Flip back to `0` afterwards.
 
 ```bash
 # llm_guardrails/

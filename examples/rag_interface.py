@@ -5,11 +5,9 @@ on the way out, same as any other completion.
 TODO: replace `fake_retrieve` with a real vector store lookup.
 """
 
-import os
-
 import httpx
 
-PROXY_URL = os.getenv("PROXY_URL", "http://localhost:8000/v1/chat/completions")
+from example_config import DEFAULT_USER_ID, MODEL, PROXY_URL
 
 
 def fake_retrieve(query: str) -> str:
@@ -17,14 +15,14 @@ def fake_retrieve(query: str) -> str:
     return "Patient record: John Doe, phone 555-123-4567, last visit 2026-01-10."
 
 
-def ask(query: str, user_id: str = "demo_user") -> str:
+def ask(query: str, user_id: str = DEFAULT_USER_ID) -> str:
     context = fake_retrieve(query)
     prompt = f"Context:\n{context}\n\nQuestion: {query}"
 
     resp = httpx.post(
         PROXY_URL,
         json={
-            "model": "nvidia/Qwen3.6-35B-A3B-NVFP4",
+            "model": MODEL,
             "messages": [{"role": "user", "content": prompt}],
         },
         headers={"x-user-id": user_id},

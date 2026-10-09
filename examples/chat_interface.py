@@ -2,19 +2,18 @@
 the simplest of the four cross-team standardized use cases
 (docs/HACKATHON_PLAN.md Integration Contract, option 1).
 
-Run: `python examples/chat_interface.py` (with proxy/main.py running on :8000).
+Run: `python examples/chat_interface.py` (with the proxy running -- the URL
+comes from example_config.py, which follows WITH_BRIDGE in .env).
 """
-import os
-
 import httpx
 
-PROXY_URL = os.getenv("PROXY_URL", "http://localhost:8000/v1/chat/completions")
+from example_config import DEFAULT_USER_ID, MODEL, PROXY_URL
 
 
-def ask(message: str, user_id: str = "demo_user") -> str:
+def ask(message: str, user_id: str = DEFAULT_USER_ID) -> str:
     resp = httpx.post(
         PROXY_URL,
-        json={"model": "nvidia/Qwen3.6-35B-A3B-NVFP4", "messages": [{"role": "user", "content": message}]},
+        json={"model": MODEL, "messages": [{"role": "user", "content": message}]},
         headers={"x-user-id": user_id},
         timeout=30.0,
     )

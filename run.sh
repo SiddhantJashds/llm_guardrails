@@ -90,8 +90,7 @@ echo "  proxy:     http://localhost:$PROXY_PORT/healthz"
 echo "  dashboard: http://localhost:$DASH_PORT/index.html"
 if [ "$WITH_BRIDGE" = "1" ]; then
   echo "  bridge:    http://localhost:8080/healthz (GuardRailBench hook contract)"
-  echo "Examples need the moved proxy port:"
-  echo "  PROXY_URL=http://localhost:$PROXY_PORT/v1/chat/completions uv run examples/chat_interface.py"
+  echo "Chat: uv run examples/chat_interface.py  (examples follow WITH_BRIDGE -> proxy :$PROXY_PORT)"
 fi
 echo "Verify with:"
 if [ "$WITH_BRIDGE" != "1" ]; then

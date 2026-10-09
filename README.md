@@ -60,8 +60,8 @@ uv run scripts/init_db.py
 
 `run.sh` reads `WITH_BRIDGE` from `.env`: `0` is normal dev (above);
 `1` is bench mode — bridge on `:8080`, proxy moves to `:8002` (the bench server
-needs `:8000`; set `PROXY_URL=http://localhost:8002/v1/chat/completions` for the
-examples), dashboard moves to `:8081`. See [docs/BENCH_BRIDGE.md](docs/BENCH_BRIDGE.md).
+needs `:8000`; `examples/` follow `WITH_BRIDGE` via `examples/example_config.py`,
+or set `PROXY_URL` to override), dashboard moves to `:8081`. See [docs/BENCH_BRIDGE.md](docs/BENCH_BRIDGE.md).
 
 Then try a reference agent end-to-end:
 

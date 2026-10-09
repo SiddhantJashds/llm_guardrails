@@ -57,7 +57,7 @@ wait_for() {
 }
 
 echo "== starting governance_api :8001 =="
-(cd governance_api && uv run uvicorn main:app --port 8001 --reload) > logs/governance_api.log 2>&1 &
+(cd governance_api && PROXY_PUBLIC_URL="http://localhost:$PROXY_PORT" uv run uvicorn main:app --port 8001 --reload) > logs/governance_api.log 2>&1 &
 # governance_api loads the NER model at startup -- everything else waits for
 # it so seeding/health checks don't race it.
 wait_for http://localhost:8001/healthz governance_api
@@ -73,6 +73,17 @@ if [ "$WITH_BRIDGE" = "1" ]; then
   echo "== starting bench_bridge :8080 =="
   (cd bench_bridge && uv run uvicorn main:app --port 8080 --reload) > logs/bench_bridge.log 2>&1 &
 fi
+# Bench mode also starts the GuardRailBench sample apps on :8000 when that repo
+# sits next to this one, so the dashboard's test console can run the
+# multi-agent, single-agent and RAG apps. run_all.py reuses whatever is on
+# :8000, so the bench suite still runs normally.
+BENCH_DIR="$ROOT/../GuardRailBench-Sample"
+BENCH_APP=0
+if [ "$WITH_BRIDGE" = "1" ] && [ -f "$BENCH_DIR/server.py" ] && [ -x "$BENCH_DIR/.venv/bin/python" ]; then
+  BENCH_APP=1
+  echo "== starting GuardRailBench apps :8000 (test console) =="
+  (cd "$BENCH_DIR" && .venv/bin/python -m uvicorn server:app --port 8000 --workers 1) > logs/bench_app.log 2>&1 &
+fi
 
 echo "logs: logs/governance_api.log logs/proxy.log logs/dashboard.log"
 echo "waiting for remaining health checks (max ~30s)..."
@@ -82,6 +93,9 @@ wait_for "http://localhost:$DASH_PORT/" dashboard
 if [ "$WITH_BRIDGE" = "1" ]; then
   wait_for http://localhost:8080/healthz bench_bridge
 fi
+if [ "$BENCH_APP" = "1" ]; then
+  wait_for http://localhost:8000/health bench_app || echo "WARN GuardRailBench apps not up; the test console's bench modes will be unavailable (logs/bench_app.log)"
+fi
 
 echo ""
 echo "All up:"
@@ -90,6 +104,7 @@ echo "  proxy:     http://localhost:$PROXY_PORT/healthz"
 echo "  dashboard: http://localhost:$DASH_PORT/index.html"
 if [ "$WITH_BRIDGE" = "1" ]; then
   echo "  bridge:    http://localhost:8080/healthz (GuardRailBench hook contract)"
+  [ "$BENCH_APP" = "1" ] && echo "  bench app: http://localhost:8000/health (GuardRailBench sample apps)"
   echo "Chat: uv run examples/chat_interface.py  (examples follow WITH_BRIDGE -> proxy :$PROXY_PORT)"
 fi
 echo "Verify with:"

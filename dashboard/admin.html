@@ -2,51 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Admin — Governance Runtime</title>
-  <link rel="stylesheet" href="static/css/style.css" />
+  <title>Governance Console</title>
+  <meta http-equiv="refresh" content="0; url=index.html#/admin" />
+  <script>location.replace("index.html#/admin");</script>
 </head>
 <body>
-  <div class="page">
-    <h1>Admin</h1>
-    <p class="subtitle">Config-only: no login, no roles, no user creation. Every user_id is fully restrictive by default (see docs/adr/0005-user-identity-no-auth.md).</p>
-
-    <nav class="tabs">
-      <a href="index.html">Session view</a>
-      <a href="user.html">Per-user view</a>
-      <a class="active" href="admin.html">Admin</a>
-    </nav>
-
-    <div class="card">
-      <h2>Per-tool authority thresholds</h2>
-      <div id="thresholds-table" class="empty-state">Loading…</div>
-    </div>
-
-    <div class="card">
-      <h2>HIPAA pack — identifier actions</h2>
-      <div id="hipaa-pack-table" class="empty-state">Loading…</div>
-    </div>
-
-    <div class="card">
-      <h2>DPDP pack — identifier actions</h2>
-      <div id="dpdp-pack-table" class="empty-state">Loading…</div>
-    </div>
-
-    <div class="card">
-      <h2>Per-user_id unredacted override</h2>
-      <p class="subtitle">Grant a user_id the right to see unredacted output. Still requires the caller to explicitly request it per-request (<code>x-request-unredacted: true</code>) — this only removes the admin-side block, redaction stays the default otherwise. Block/hash actions are never affected.</p>
-      <div class="filter-row">
-        <input id="override-user-id-input" type="text" placeholder="user_id" />
-        <label style="font-size: 13px; display: flex; align-items: center; gap: 6px;">
-          <input id="override-allow-checkbox" type="checkbox" /> allow unredacted
-        </label>
-        <button id="grant-override-btn">Save</button>
-      </div>
-      <div id="overrides-table" class="empty-state">Loading…</div>
-    </div>
-  </div>
-
-  <script src="static/js/api.js"></script>
-  <script src="static/js/admin.js"></script>
+  <p>Admin moved to <a href="index.html#/admin">index.html#/admin</a>.</p>
 </body>
 </html>

@@ -1,27 +1,54 @@
-// Thin fetch wrapper around governance_api's read-only /dashboard/* endpoints.
-const GOVERNANCE_API_BASE_URL = window.GOVERNANCE_API_BASE_URL || "http://localhost:8001";
+// Fetch wrappers around governance_api's read-only /dashboard/* endpoints
+// (and the admin PUTs). The API base can be overridden with ?api=<url>,
+// window.GOVERNANCE_API_BASE_URL, or defaults to localhost:8001.
+const params = new URLSearchParams(location.search);
+export const API_BASE = (params.get("api") || window.GOVERNANCE_API_BASE_URL || "http://localhost:8001").replace(/\/+$/, "");
 
-// Every field rendered below comes from data the API returns -- reason,
-// agent_id, user_id, etc. -- and user_id in particular is caller-supplied
-// with no validation by design (docs/adr/0005-user-identity-no-auth.md), so
-// it can contain anything an attacker chooses. It can end up in a receipt's
-// `reason` field and from there in this dashboard. Never interpolate any of
-// it into innerHTML without this -- that's a stored-XSS hole, not a
-// hypothetical one.
-function escapeHtml(value) {
-  const div = document.createElement("div");
-  div.textContent = value === null || value === undefined ? "" : String(value);
-  return div.innerHTML;
+export class ApiError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
 }
 
-async function fetchSessionDashboard(sessionId) {
-  const resp = await fetch(`${GOVERNANCE_API_BASE_URL}/dashboard/session/${encodeURIComponent(sessionId)}`);
-  if (!resp.ok) throw new Error(`session dashboard fetch failed: ${resp.status}`);
+function url(path, query) {
+  const u = new URL(API_BASE + path);
+  for (const [k, v] of Object.entries(query || {})) {
+    if (v !== undefined && v !== null && v !== "" && v !== false) u.searchParams.set(k, v);
+  }
+  return u;
+}
+
+async function request(method, path, { query, body } = {}) {
+  let resp;
+  try {
+    resp = await fetch(url(path, query), {
+      method,
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (e) {
+    throw new ApiError(0, `Can't reach the governance API at ${API_BASE}.`);
+  }
+  if (!resp.ok) throw new ApiError(resp.status, `${method} ${path} failed with HTTP ${resp.status}.`);
   return resp.json();
 }
 
-async function fetchUserDashboard(userId) {
-  const resp = await fetch(`${GOVERNANCE_API_BASE_URL}/dashboard/user/${encodeURIComponent(userId)}`);
-  if (!resp.ok) throw new Error(`user dashboard fetch failed: ${resp.status}`);
-  return resp.json();
+export const getJSON = (path, query) => request("GET", path, { query });
+export const putJSON = (path, body) => request("PUT", path, { body });
+
+// Every field rendered by the dashboard comes from the API, and user_id in
+// particular is caller-supplied with no validation by design
+// (docs/adr/0005-user-identity-no-auth.md): it can contain anything an
+// attacker chooses, and it flows into receipts and from there onto this
+// page. Never interpolate API data into HTML without this -- that's a
+// stored-XSS hole, not a hypothetical one. Escapes quotes too, so it's safe
+// inside attribute values.
+export function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }

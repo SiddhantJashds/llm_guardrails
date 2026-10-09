@@ -1,0 +1,147 @@
+/* Design tokens: colour, type, spacing. Everything else reads these.
+   Light is the default; dark is its own selected set (not an auto flip),
+   applied for the OS setting unless the viewer pinned light, and always when
+   the viewer pinned dark. */
+:root {
+  color-scheme: light;
+
+  /* Ledger paper and ink: softened light theme (no pure white, readable greys) */
+  --page: #e4e7eb;
+  --surface: #f4f5f7;
+  --surface-sunk: #eaedf0;
+  --ink: #1f2933;
+  --ink-2: #3c4857;
+  --ink-3: #5c6877;
+  --hairline: #d3d8de;
+  --rule: #bcc4cd;
+  --focus: #2a6fc4;
+  --link: #1d5ca8;
+
+  /* The redaction bar: identifiers render as blacked-out labels */
+  --redact-bar: #27313d;
+  --redact-text: #eef1f4;
+
+  /* Outcomes are states: fixed status palette, always paired with an icon + label */
+  --ok: #0ca30c;
+  --warn: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+  --neutral: #8a94a3;
+  --ok-text: #0a5c0a;
+  --warn-text: #6e4a00;
+  --serious-text: #8c3812;
+  --critical-text: #9a2222;
+  --ok-wash: #d9ecd9;
+  --warn-wash: #f5e8c4;
+  --serious-wash: #f3dccf;
+  --critical-wash: #f1d6d6;
+  --neutral-wash: #dde2e8;
+
+  /* Categorical series (agents, token in/out) - validated order, never cycled */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #4a3aa7;
+  --series-8: #e34948;
+
+  --gridline: #d9dee4;
+  --baseline: #b3bcc7;
+
+  /* Type */
+  --font-ui: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --t-xs: 12px;
+  --t-sm: 13px;
+  --t-md: 14px;
+  --t-lg: 16px;
+  --t-xl: 20px;
+  --t-2xl: 26px;
+  --t-hero: 32px;
+
+  /* Space and shape */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+  --radius-sm: 3px;
+  --radius: 6px;
+  --sidebar-w: 224px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #171717;
+    --surface: #202124;
+    --surface-sunk: #28292c;
+    --ink: #e8eaed;
+    --ink-2: #bdc1c6;
+    --ink-3: #9aa0a6;
+    --hairline: #34363a;
+    --rule: #4a4d51;
+    --focus: #8ab4f8;
+    --link: #8ab4f8;
+    --redact-bar: #e8eaed;
+    --redact-text: #202124;
+    --ok-text: #81c995;
+    --warn-text: #fdd663;
+    --serious-text: #fcad70;
+    --critical-text: #f28b82;
+    --ok-wash: #233127;
+    --warn-wash: #36321f;
+    --serious-wash: #3a2c22;
+    --critical-wash: #3b2626;
+    --neutral-wash: #303134;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
+    --gridline: #2e3033;
+    --baseline: #4a4d51;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #171717;
+  --surface: #202124;
+  --surface-sunk: #28292c;
+  --ink: #e8eaed;
+  --ink-2: #bdc1c6;
+  --ink-3: #9aa0a6;
+  --hairline: #34363a;
+  --rule: #4a4d51;
+  --focus: #8ab4f8;
+  --link: #8ab4f8;
+  --redact-bar: #e8eaed;
+  --redact-text: #202124;
+  --ok-text: #81c995;
+  --warn-text: #fdd663;
+  --serious-text: #fcad70;
+  --critical-text: #f28b82;
+  --ok-wash: #233127;
+  --warn-wash: #36321f;
+  --serious-wash: #3a2c22;
+  --critical-wash: #3b2626;
+  --neutral-wash: #303134;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
+  --series-8: #e66767;
+  --gridline: #2e3033;
+  --baseline: #4a4d51;
+}

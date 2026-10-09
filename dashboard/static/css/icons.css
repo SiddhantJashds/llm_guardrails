@@ -1,0 +1,36 @@
+/* Material Icons (Outlined), served locally from static/vendor/fonts
+   (Apache-2.0, see material-icons.LICENSE). Usage: <span class="icon">check</span> */
+@font-face {
+  font-family: "Material Icons Outlined";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("../vendor/fonts/material-icons-outlined.woff2") format("woff2");
+}
+
+.icon {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 1em;
+  height: 1em;
+  overflow: hidden;
+  font-family: "Material Icons Outlined";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 18px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  vertical-align: middle;
+  -webkit-font-feature-settings: "liga";
+  font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+.icon--sm { font-size: 16px; }
+.icon--xs { font-size: 14px; }
+.icon--lg { font-size: 20px; }

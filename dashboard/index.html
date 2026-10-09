@@ -3,44 +3,62 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Session Dashboard — Governance Runtime</title>
-  <link rel="stylesheet" href="static/css/style.css" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <title>Guardrails Governance Console</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='4' width='6' height='8' rx='1.5' fill='%231b2430'/%3E%3Crect x='9' y='4' width='6' height='8' rx='1.5' fill='%232a78d6'/%3E%3Crect x='6' y='7.25' width='4' height='1.5' fill='%231b2430'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="static/css/fonts.css" />
+  <link rel="stylesheet" href="static/css/tokens.css" />
+  <link rel="stylesheet" href="static/css/icons.css" />
+  <link rel="stylesheet" href="static/css/base.css" />
+  <link rel="stylesheet" href="static/css/layout.css" />
+  <link rel="stylesheet" href="static/css/components.css" />
+  <link rel="stylesheet" href="static/css/views.css" />
+  <script src="static/vendor/chart.umd.min.js"></script>
+  <script type="module" src="static/js/app.js"></script>
 </head>
 <body>
-  <div class="page">
-    <h1>Governance Dashboard</h1>
-    <p class="subtitle">Live authority score trend, compliance violations, and denied tool calls — per agent_id.</p>
-
-    <nav class="tabs">
-      <a class="active" href="index.html">Session view</a>
-      <a href="user.html">Per-user view</a>
-      <a href="admin.html">Admin</a>
-    </nav>
-
-    <div class="filter-row">
-      <input id="session-id-input" type="text" placeholder="session_id (e.g. sess_abc123)" />
-      <button id="load-session-btn">Load</button>
-      <span id="live-indicator" class="live-badge" style="display:none;">● Live (3s)</span>
-    </div>
-
-    <div class="card">
-      <h2>Authority score trend (per agent_id)</h2>
-      <canvas id="trust-trend-chart" height="90"></canvas>
-    </div>
-
-    <div class="card">
-      <h2>Compliance violations</h2>
-      <div id="violations-list" class="empty-state">Load a session to see violations.</div>
-    </div>
-
-    <div class="card">
-      <h2>Denied tool calls</h2>
-      <div id="denied-calls-list" class="empty-state">Load a session to see denied calls.</div>
-    </div>
+  <div class="shell" id="shell" data-chat="closed">
+    <aside class="sidebar">
+      <div class="brand">
+        <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="1.5" y="6" width="9" height="12" rx="2" fill="currentColor" />
+          <rect x="13.5" y="6" width="9" height="12" rx="2" fill="var(--focus)" />
+          <rect x="9" y="11" width="6" height="2" fill="currentColor" />
+        </svg>
+        <span class="brand__text">
+          <span class="brand__name">Guardrails</span>
+          <span class="brand__sub">Governance Console</span>
+        </span>
+      </div>
+      <nav class="nav" aria-label="Main">
+        <a href="#/overview" data-nav="overview"><span class="icon nav__glyph" aria-hidden="true">dashboard</span>Overview</a>
+        <a href="#/sessions" data-nav="sessions"><span class="icon nav__glyph" aria-hidden="true">forum</span>Sessions</a>
+        <a href="#/users" data-nav="users"><span class="icon nav__glyph" aria-hidden="true">group</span>Users</a>
+        <a href="#/ledger" data-nav="ledger"><span class="icon nav__glyph" aria-hidden="true">receipt_long</span>Audit ledger</a>
+        <a href="#/live" data-nav="live"><span class="icon nav__glyph" aria-hidden="true">sensors</span>Live bench</a>
+        <a href="#/bench" data-nav="bench"><span class="icon nav__glyph" aria-hidden="true">fact_check</span>Evaluations</a>
+        <a href="#/admin" data-nav="admin"><span class="icon nav__glyph" aria-hidden="true">tune</span>Policy settings</a>
+        <button class="nav__button" id="chat-toggle" type="button" aria-controls="chat-dock" aria-expanded="false"><span class="icon nav__glyph" aria-hidden="true">terminal</span>Test console</button>
+      </nav>
+      <div class="sidebar__foot">
+        <button id="live-toggle" class="foot-row live" type="button" aria-pressed="true" title="Refresh data every 5 seconds">
+          <span class="icon icon--sm" aria-hidden="true">autorenew</span><span class="live__label">Auto-refresh on</span><span class="live__dot" aria-hidden="true"></span>
+        </button>
+        <div class="segmented segmented--block" role="group" aria-label="Theme">
+          <button type="button" data-theme-choice="system" aria-pressed="true" title="Follow system setting"><span class="icon icon--sm" aria-hidden="true">contrast</span>Auto</button>
+          <button type="button" data-theme-choice="light" aria-pressed="false" title="Light theme"><span class="icon icon--sm" aria-hidden="true">light_mode</span>Light</button>
+          <button type="button" data-theme-choice="dark" aria-pressed="false" title="Dark theme"><span class="icon icon--sm" aria-hidden="true">dark_mode</span>Dark</button>
+        </div>
+        <div id="api-status" class="api-status"></div>
+      </div>
+    </aside>
+    <main class="main">
+      <div id="banner" class="banner" role="alert" hidden></div>
+      <div id="view" class="view"></div>
+    </main>
+    <aside class="dock" id="chat-dock" aria-label="Test console">
+      <div class="dock__resize" id="chat-resize" role="separator" aria-orientation="vertical" aria-label="Resize test console" tabindex="0"></div>
+      <div class="dock__body" id="chat-root"></div>
+    </aside>
   </div>
-
-  <script src="static/js/api.js"></script>
-  <script src="static/js/session_dashboard.js"></script>
 </body>
 </html>

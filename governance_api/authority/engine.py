@@ -30,13 +30,15 @@ class AuthorityEngine:
         self.db = db
 
     def get_or_create(self, agent_id: str, session_id: str, parent_agent_id: Optional[str]) -> AgentTrustState:
-        state = self.db.get(AgentTrustState, agent_id)
+        state = self.db.get(AgentTrustState, (agent_id, session_id))
         if state is not None:
             return state
 
         initial_score = DEFAULT_SCORE
         if parent_agent_id:
-            parent = self.db.get(AgentTrustState, parent_agent_id)
+            # Same-session parent only: another session's (or user's) score
+            # must never cap this agent.
+            parent = self.db.get(AgentTrustState, (parent_agent_id, session_id))
             if parent is not None:
                 initial_score = capped_initial_score(DEFAULT_SCORE, parent.current_score)
 
@@ -52,8 +54,8 @@ class AuthorityEngine:
         self.db.refresh(state)
         return state
 
-    def apply_signal(self, agent_id: str, signal: str) -> AgentTrustState:
-        state = self.db.get(AgentTrustState, agent_id)
+    def apply_signal(self, agent_id: str, session_id: str, signal: str) -> AgentTrustState:
+        state = self.db.get(AgentTrustState, (agent_id, session_id))
         if state is None:
             raise ValueError(f"unknown agent_id: {agent_id}")
         penalty = SIGNAL_PENALTIES.get(signal, 0.0)
@@ -63,7 +65,7 @@ class AuthorityEngine:
         self.db.refresh(state)
         return state
 
-    def check_threshold(self, agent_id: str, required_threshold: float) -> bool:
-        state = self.db.get(AgentTrustState, agent_id)
+    def check_threshold(self, agent_id: str, session_id: str, required_threshold: float) -> bool:
+        state = self.db.get(AgentTrustState, (agent_id, session_id))
         current = state.current_score if state else DEFAULT_SCORE
         return current >= required_threshold

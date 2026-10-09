@@ -6,7 +6,17 @@ Legend: `[ ]` not started · `[~]` scaffolded (file/wiring exists, real logic st
 
 Before marking anything `[x]` that touches `shared/`, `authority/`, `compliance/`, `access_control/`, or a route: run `pytest` from the repo root ([docs/adr/0007](adr/0007-tests-and-ci-before-handoff.md)). It also runs automatically in CI on every push/PR.
 
-Last updated: 2026-10-08 (Data Engineer Day2 #5 done: proxy calls ingest_event from upstream response; .env DATABASE_URL fix applied.)
+Last updated: 2026-10-09 (Data Engineer Day2 #5 done: proxy calls ingest_event from upstream response; .env DATABASE_URL fix applied.)
+
+Last updated: 2026-10-09 (bench integration: `bench_bridge/` serves the GuardRailBench hook contract — sample-edition scenarios 1, 4, 13 score 3/3 PASS; trust state re-keyed per (agent, session) [adr/0013]; tool-result scans redact without charging score [adr/0014]; `run.sh` is `.env`-driven via `WITH_BRIDGE`; `examples/chat_memory.py` adds LangGraph-checkpoint memory; `pytest` 176 passed + 1 xfailed.)
+
+## Bench bridge (cross-cutting, 2026-10-09)
+
+- [x] `bench_bridge/main.py` — 5 hook endpoints → `compliance-check`/`tool-check` (+ out-of-scope deny), fail-closed, seed-if-absent bench thresholds (low 50 / medium 60 / high 80); `scripts/check_contract.py` 5/5; full `run_all.py` 3/3 PASS (see [docs/BENCH_BRIDGE.md](BENCH_BRIDGE.md))
+- [x] Session-scoped trust — composite PK `(agent_id, session_id)`; same-session parent cap; regression test `test_scores_are_isolated_between_sessions` ([adr/0013](adr/0013-session-scoped-trust-state.md)); requires `governance.db` rebuild
+- [x] `apply_score` on `compliance-check` — tool-result scans redact + receipt, no penalty ([adr/0014](adr/0014-tool-result-scans-dont-charge-score.md)); SDK `check_compliance` passes it through
+- [x] `run.sh` — one-command startup, `WITH_BRIDGE` read from `.env` (never sourced), ordered boot (api → rest), proxy skipped + dashboard on `:8081` in bench mode
+- [x] `examples/chat_memory.py` — LangGraph `InMemorySaver` memory chat through the proxy (verified two-turn recall); `examples/rag_interface.py` model fixed to the served Qwen model; LangGraph demo catches its own `PermissionError` denial instead of tracebacking
 
 ## SWE #1 (Sauda) — Gateway & Integration Engineer
 
@@ -22,7 +32,7 @@ Last updated: 2026-10-08 (Data Engineer Day2 #5 done: proxy calls ingest_event f
 - [x] 7. LangGraph `@governed_node` wrapping — verified against the installed LangGraph API (adr/0012): `wrap_graph_nodes`'s original attribute assignment was genuinely broken (`.runnable` is a `RunnableCallable`, not directly callable — fixed by mutating `.runnable.func` in place); also found and fixed `governed_node` re-penalizing every downstream node for an upstream node's leak it only carried forward in state, never caused itself (`governance_sdk/tests/test_langgraph_integration.py`, `examples/langgraph_multi_agent.py`)
 - [x] 8. Delegation capping — `authority/delegation.py`, enforced in `AuthorityEngine.get_or_create`
 - [x] 9. Fail-closed behavior — `GovernanceClient._post`, proxy's `_fail_closed`
-- [~] 10. DPDP pack through the proxy path — pack config seeded; detectors ARE now wired into the engine (this note was stale — see Data Scientist Day1 #4/Day2 #5), so the only remaining blocker is `proxy/main.py` hardcoding `"pack_id": "hipaa"` on both compliance-check calls instead of making it selectable
+- [x] 10. DPDP pack through the proxy path — `proxy/main.py` takes the pack from an `x-compliance-pack` header (`hipaa` default, `dpdp`; unknown value → 400, since the engine would otherwise silently allow it); DPDP PAN hashed / Aadhaar blocked / HIPAA-only SSN left alone, inbound and outbound, against the real governance_api with the shipped pack configs (`proxy/tests/test_pack_selection.py`)
 - [~] 11. Demo script's three scenarios wired through both single- and multi-agent paths — the MECHANISM is now proven working through both paths (#6/#7 above: tool allow/deny, PHI redaction+scoring, multi-agent handoff all verified for real), but the actual 3 canonical demo-script scenarios (same ones in `governance_api/tests/test_demo_scenarios.py`) haven't been composed into one script run through each path yet
 
 ## SWE #2 (Harsh) — Authority Engine & Dashboard Engineer

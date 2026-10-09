@@ -28,9 +28,9 @@ def test_tool_check_denies_once_score_drops_below_threshold(client, db_session):
     identity = make_identity(agent_id="repeat_offender")
     engine = AuthorityEngine(db_session)
     engine.get_or_create(identity["agent_id"], identity["session_id"], None)
-    engine.apply_signal(identity["agent_id"], "phi_in_output")  # 100 -> 80
-    engine.apply_signal(identity["agent_id"], "phi_in_output")  # 80 -> 60
-    engine.apply_signal(identity["agent_id"], "phi_in_output")  # 60 -> 40 (below the 60 default threshold)
+    engine.apply_signal(identity["agent_id"], identity["session_id"], "phi_in_output")  # 100 -> 80
+    engine.apply_signal(identity["agent_id"], identity["session_id"], "phi_in_output")  # 80 -> 60
+    engine.apply_signal(identity["agent_id"], identity["session_id"], "phi_in_output")  # 60 -> 40 (below the 60 default threshold)
 
     resp = client.post("/governance/tool-check", json={"identity": identity, "tool_id": "sql_query_tool"})
     body = resp.json()
@@ -85,7 +85,7 @@ def test_dashboard_session_attributes_denied_call_to_the_right_agent(client, db_
     engine = AuthorityEngine(db_session)
     engine.get_or_create(identity["agent_id"], identity["session_id"], None)
     for _ in range(3):
-        engine.apply_signal(identity["agent_id"], "phi_in_output")  # 100 -> 40, below the 60 default threshold
+        engine.apply_signal(identity["agent_id"], identity["session_id"], "phi_in_output")  # 100 -> 40, below the 60 default threshold
 
     client.post("/governance/tool-check", json={"identity": identity, "tool_id": "sql_query_tool"})
 
@@ -228,9 +228,9 @@ def test_handoff_check_blocks_when_session_min_score_falls_below_threshold(clien
     agent_a = make_identity(agent_id="rollup_agent_a", session_id=session_id)
     engine = AuthorityEngine(db_session)
     engine.get_or_create(agent_a["agent_id"], agent_a["session_id"], None)
-    engine.apply_signal(agent_a["agent_id"], "phi_in_output")  # 100 -> 80
-    engine.apply_signal(agent_a["agent_id"], "phi_in_output")  # 80 -> 60
-    engine.apply_signal(agent_a["agent_id"], "phi_in_output")  # 60 -> 40
+    engine.apply_signal(agent_a["agent_id"], agent_a["session_id"], "phi_in_output")  # 100 -> 80
+    engine.apply_signal(agent_a["agent_id"], agent_a["session_id"], "phi_in_output")  # 80 -> 60
+    engine.apply_signal(agent_a["agent_id"], agent_a["session_id"], "phi_in_output")  # 60 -> 40
 
     # Agent B is fresh (score 100) but in the same session
     agent_b = make_identity(agent_id="rollup_agent_b", session_id=session_id)
@@ -255,7 +255,7 @@ def test_handoff_check_allows_when_all_agents_stay_above_threshold(client, db_se
     engine = AuthorityEngine(db_session)
     engine.get_or_create(agent_a["agent_id"], agent_a["session_id"], None)
     # One minor hit: NER-only (-5) keeps score at 95, well above 60
-    engine.apply_signal(agent_a["agent_id"], "prompt_injection_detected")  # 100 -> 75
+    engine.apply_signal(agent_a["agent_id"], agent_a["session_id"], "prompt_injection_detected")  # 100 -> 75
 
     agent_b = make_identity(agent_id="clean_agent_b", session_id=session_id)
     engine.get_or_create(agent_b["agent_id"], agent_b["session_id"], None)

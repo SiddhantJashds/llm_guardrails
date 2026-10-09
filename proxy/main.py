@@ -7,6 +7,7 @@ reaches, or after it leaves, the real upstream LLM.
 
 Run: `uvicorn main:app --port 8000` from inside this directory.
 """
+import json
 import os
 import sys
 from pathlib import Path
@@ -41,6 +42,13 @@ from data_pipeline.ingestion.token_usage_pipeline import ingest_event  # noqa: E
 UPSTREAM_LLM_BASE_URL = os.getenv("UPSTREAM_LLM_BASE_URL", "https://api.openai.com/v1")
 UPSTREAM_LLM_API_KEY = os.getenv("UPSTREAM_LLM_API_KEY", "")
 GOVERNANCE_API_URL = os.getenv("GOVERNANCE_API_URL", "http://localhost:8001")
+
+# Packs the compliance engine has detectors for. Checked HERE, not left to
+# governance_api, because the engine treats an unknown pack_id as "no
+# detectors" and allows everything -- a typo'd header would silently disable
+# scanning. Keep in sync with `_get_detector` in governance_api/compliance/engine.py.
+SUPPORTED_PACKS = frozenset({"hipaa", "dpdp"})
+DEFAULT_PACK = "hipaa"
 
 app = FastAPI(title="governance-proxy")
 
@@ -85,6 +93,15 @@ async def chat_completions(request: Request):
     # own unredaction; see docs/adr/0005 and docs/HACKATHON_PLAN.md hardening #2).
     request_unredacted = request.headers.get("x-request-unredacted", "false").lower() == "true"
 
+    # Which compliance pack to run (HIPAA vs DPDP): same rule -- a header set
+    # by the caller's trusted code, never read from the message text.
+    pack_id = (request.headers.get("x-compliance-pack") or DEFAULT_PACK).strip().lower()
+    if pack_id not in SUPPORTED_PACKS:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "unknown_compliance_pack", "pack_id": pack_id, "supported": sorted(SUPPORTED_PACKS)},
+        )
+
     async with httpx.AsyncClient(timeout=10.0) as client:
         async def check(text: str, direction: str) -> dict:
             print(f"[DEBUG] compliance-check dir={direction} text_len={len(text)}")
@@ -95,7 +112,7 @@ async def chat_completions(request: Request):
                         "identity": identity,
                         "text": text,
                         "direction": direction,
-                        "pack_id": "hipaa",
+                        "pack_id": pack_id,
                         "request_unredacted": request_unredacted,
                     },
                 )

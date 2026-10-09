@@ -4,6 +4,7 @@ on the way out, same as any other completion.
 
 TODO: replace `fake_retrieve` with a real vector store lookup.
 """
+
 import os
 
 import httpx
@@ -22,7 +23,10 @@ def ask(query: str, user_id: str = "demo_user") -> str:
 
     resp = httpx.post(
         PROXY_URL,
-        json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": prompt}]},
+        json={
+            "model": "nvidia/Qwen3.6-35B-A3B-NVFP4",
+            "messages": [{"role": "user", "content": prompt}],
+        },
         headers={"x-user-id": user_id},
         timeout=30.0,
     )

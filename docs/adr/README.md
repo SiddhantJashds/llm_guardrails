@@ -26,3 +26,5 @@ If you're not sure whether something rises to that bar, ask — or use the `deci
 | [0010](0010-wire-injection-detection-into-compliance-routes.md) | Wire prompt-injection detection into the real decision pipeline | Accepted |
 | [0011](0011-composite-rating-and-effective-use-formulas.md) | Composite trust rating / effective-use score: real formulas | Accepted |
 | [0012](0012-langchain-langgraph-verified-against-installed-apis.md) | LangChain/LangGraph integrations verified against installed APIs | Accepted |
+| [0013](0013-session-scoped-trust-state.md) | Trust state keyed per (agent, session), not per agent | Accepted |
+| [0014](0014-tool-result-scans-dont-charge-score.md) | Tool-result scans redact but don't charge score | Accepted |

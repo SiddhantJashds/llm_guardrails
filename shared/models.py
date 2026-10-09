@@ -53,8 +53,11 @@ class AgentTrustState(Base):
 
     __tablename__ = "agent_trust_state"
 
+    # Composite PK: trust is per (agent, session). A global agent_id PK leaked
+    # scores across sessions AND users (bench scenarios poisoned each other,
+    # and the per-session dashboard view could never find the state rows).
     agent_id = Column(String, primary_key=True)
-    session_id = Column(String, nullable=False, index=True)
+    session_id = Column(String, primary_key=True, index=True)
     parent_agent_id = Column(String, nullable=True)
     current_score = Column(Float, default=100.0, nullable=False)
     last_updated = Column(DateTime, default=_now, onupdate=_now)

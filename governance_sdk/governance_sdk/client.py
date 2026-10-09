@@ -39,16 +39,23 @@ class GovernanceClient:
                 resp = httpx.post(f"{self.base_url}{path}", json=payload, timeout=self.timeout)
             resp.raise_for_status()
             return resp.json()
-        except httpx.HTTPError as exc:
+        except Exception as exc:
+            # Broad on purpose (hardening #5: deny on error): this must hold
+            # for transport errors from ANY httpx major (the venv has both
+            # httpx 0.x and httpx2 2.x, whose error hierarchies don't overlap)
+            # as well as errors the in-process TestClient re-raises, not just
+            # the httpx.HTTPError real network calls produce.
             return {"allowed": False, "verdict": "deny", "reason": f"governance_api_unreachable: {exc}"}
 
     def check_tool(self, identity: dict, tool_id: str) -> dict:
         return self._post("/governance/tool-check", {"identity": identity, "tool_id": tool_id})
 
-    def check_compliance(self, identity: dict, text: str, direction: str, pack_id: str = "hipaa") -> dict:
+    def check_compliance(
+        self, identity: dict, text: str, direction: str, pack_id: str = "hipaa", apply_score: bool = True
+    ) -> dict:
         return self._post(
             "/governance/compliance-check",
-            {"identity": identity, "text": text, "direction": direction, "pack_id": pack_id},
+            {"identity": identity, "text": text, "direction": direction, "pack_id": pack_id, "apply_score": apply_score},
         )
 
     def check_handoff(self, identity: dict, output_text: str, pack_id: str = "hipaa") -> dict:

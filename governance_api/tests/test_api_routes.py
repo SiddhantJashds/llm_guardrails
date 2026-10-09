@@ -104,6 +104,34 @@ def test_dashboard_user_view_reflects_written_receipts(client):
     assert len(body["recent_decisions"]) == 1
 
 
+def test_dashboard_user_token_totals_come_from_events_without_the_aggregation_job(client, db_session):
+    from shared.models import TokenUsageEvent
+
+    db_session.add_all(
+        [
+            TokenUsageEvent(user_id="tok_user", session_id="s1", agent_id="a1", tokens_in=100, tokens_out=40),
+            TokenUsageEvent(user_id="tok_user", session_id="s1", agent_id="a1", tokens_in=50, tokens_out=10),
+        ]
+    )
+    db_session.commit()  # note: user_profile_job never runs in this test
+
+    body = client.get("/dashboard/user/tok_user").json()
+    assert body["profile"]["total_tokens_in"] == 150
+    assert body["profile"]["total_tokens_out"] == 50
+    assert [(e["tokens_in"], e["tokens_out"]) for e in body["token_usage"]] == [(100, 40), (50, 10)]
+
+
+def test_dashboard_user_token_usage_never_includes_another_users_events(client, db_session):
+    from shared.models import TokenUsageEvent
+
+    db_session.add(TokenUsageEvent(user_id="other_user", session_id="s1", agent_id="a1", tokens_in=999, tokens_out=999))
+    db_session.commit()
+
+    body = client.get("/dashboard/user/tok_user_2").json()
+    assert body["profile"]["total_tokens_in"] == 0
+    assert body["token_usage"] == []
+
+
 def test_compliance_check_actually_catches_phi_once_detectors_are_wired(client):
     resp = client.post(
         "/governance/compliance-check",

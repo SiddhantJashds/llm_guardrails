@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # allow `import shared`
 from shared.db import get_db  # noqa: E402
-from shared.models import Receipt, AgentTrustState, UserProfile  # noqa: E402
+from shared.models import Receipt, AgentTrustState, UserProfile, TokenUsageEvent  # noqa: E402
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -48,16 +48,26 @@ def user_dashboard(user_id: str, db: Session = Depends(get_db)):
     # (docs/HACKATHON_PLAN.md hardening #8).
     profile = db.get(UserProfile, user_id)
     receipts = db.query(Receipt).filter(Receipt.user_id == user_id).order_by(Receipt.timestamp).all()
+    usage_events = (
+        db.query(TokenUsageEvent).filter(TokenUsageEvent.user_id == user_id).order_by(TokenUsageEvent.timestamp).all()
+    )
 
     return {
         "user_id": user_id,
         "profile": {
-            "total_tokens_in": profile.total_tokens_in if profile else 0,
-            "total_tokens_out": profile.total_tokens_out if profile else 0,
+            # Token totals come straight from the raw events, not UserProfile:
+            # that table is only refreshed when user_profile_job.py runs, which
+            # is manual, so the live-polling dashboard would sit at 0 until then.
+            "total_tokens_in": sum(e.tokens_in or 0 for e in usage_events),
+            "total_tokens_out": sum(e.tokens_out or 0 for e in usage_events),
             "composite_rating": profile.composite_rating if profile else None,
             "effective_use_score": profile.effective_use_score if profile else None,
             "violation_count": profile.violation_count if profile else 0,
         },
+        "token_usage": [
+            {"timestamp": e.timestamp.isoformat(), "tokens_in": e.tokens_in or 0, "tokens_out": e.tokens_out or 0}
+            for e in usage_events[-50:]
+        ],
         "recent_decisions": [
             {"verdict": r.verdict, "decision_type": r.decision_type, "timestamp": r.timestamp.isoformat(), "reason": r.reason}
             for r in receipts[-50:]

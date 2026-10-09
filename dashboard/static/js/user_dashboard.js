@@ -16,7 +16,7 @@ async function refreshData() {
   try {
     const data = await fetchUserDashboard(userId);
     renderProfileTiles(data.profile);
-    renderUsageChart(data.profile);
+    renderUsageChart(data.token_usage || []);
     renderDecisionHistory(data.recent_decisions);
   } catch (e) {
     console.warn("Live refresh failed:", e);
@@ -35,27 +35,29 @@ function renderProfileTiles(profile) {
   document.getElementById("tile-violations").textContent = profile.violation_count;
 }
 
-function renderUsageChart(profile) {
+function renderUsageChart(events) {
   const ctx = document.getElementById("token-usage-chart").getContext("2d");
   if (usageChart) usageChart.destroy();
-  // TODO: replace this single-point placeholder with the real time series
-  // once data_pipeline/ingestion/token_usage_pipeline.py is populating events.
+  // One point per upstream LLM call (TokenUsageEvent), oldest first.
+  const series = (key, cssName, label) => ({
+    label,
+    data: events.map((e) => e[key]),
+    borderColor: cssVar(cssName),
+    backgroundColor: cssVar(cssName),
+    borderWidth: 2,
+    pointRadius: 3,
+    tension: 0,
+  });
   usageChart = new Chart(ctx, {
-    type: "bar",
+    type: "line",
     data: {
-      labels: ["tokens in", "tokens out"],
-      datasets: [
-        {
-          label: "Total tokens",
-          data: [profile.total_tokens_in, profile.total_tokens_out],
-          backgroundColor: [cssVar("--series-1"), cssVar("--series-2")],
-        },
-      ],
+      labels: events.map((e) => new Date(e.timestamp).toLocaleTimeString()),
+      datasets: [series("tokens_in", "--series-1", "Tokens in"), series("tokens_out", "--series-2", "Tokens out")],
     },
     options: {
       responsive: true,
-      plugins: { legend: { display: false }, tooltip: { enabled: true } },
-      scales: { y: { grid: { color: cssVar("--gridline") } }, x: { grid: { display: false } } },
+      plugins: { legend: { display: true }, tooltip: { enabled: true } },
+      scales: { y: { beginAtZero: true, grid: { color: cssVar("--gridline") } }, x: { grid: { display: false } } },
     },
   });
 }

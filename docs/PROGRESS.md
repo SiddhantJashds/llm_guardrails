@@ -6,9 +6,7 @@ Legend: `[ ]` not started · `[~]` scaffolded (file/wiring exists, real logic st
 
 Before marking anything `[x]` that touches `shared/`, `authority/`, `compliance/`, `access_control/`, or a route: run `pytest` from the repo root ([docs/adr/0007](adr/0007-tests-and-ci-before-handoff.md)). It also runs automatically in CI on every push/PR.
 
-Last updated: 2026-10-09 (Data Engineer Day2 #5 done: proxy calls ingest_event from upstream response; .env DATABASE_URL fix applied.)
-
-Last updated: 2026-10-09 (bench integration: `bench_bridge/` serves the GuardRailBench hook contract — sample-edition scenarios 1, 4, 13 score 3/3 PASS; trust state re-keyed per (agent, session) [adr/0013]; tool-result scans redact without charging score [adr/0014]; `run.sh` is `.env`-driven via `WITH_BRIDGE`; `examples/chat_memory.py` adds LangGraph-checkpoint memory; `pytest` 176 passed + 1 xfailed.)
+Last updated: 2026-10-09 (SWE#2 Day2 #9 done: per-user token tiles + per-call usage chart read live from TokenUsageEvent. Data Engineer Day2 #5 done: proxy calls ingest_event from upstream response; .env DATABASE_URL fix applied. Bench integration: `bench_bridge/` serves the GuardRailBench hook contract — sample-edition scenarios 1, 4, 13 score 3/3 PASS; trust state re-keyed per (agent, session) [adr/0013]; tool-result scans redact without charging score [adr/0014]; `run.sh` is `.env`-driven via `WITH_BRIDGE`; `examples/chat_memory.py` adds LangGraph-checkpoint memory; `pytest` 176 passed + 1 xfailed.)
 
 ## Bench bridge (cross-cutting, 2026-10-09)
 
@@ -49,7 +47,7 @@ Last updated: 2026-10-09 (bench integration: `bench_bridge/` serves the GuardRai
 - [x] 7. Per-agent rollup across a session (block final output if enough agents violate) — `handoff_check` now queries all `AgentTrustState` rows for the session, uses the lowest score vs. `DEFAULT_THRESHOLD` (60) to decide; added tests `test_handoff_check_blocks_when_session_min_score_falls_below_threshold` and `test_handoff_check_allows_when_all_agents_stay_above_threshold`
 - [x] 8. Dashboard frontend — session view + per-user view built (`dashboard/index.html`, `user.html`); live polling at 3s interval with green "● Live (3s)" badge, starts on "Load" click, stops on re-load (clears interval); static CSS badge added
 - [x] 8b. Admin page (config-only, [docs/adr/0005](adr/0005-user-identity-no-auth.md)) — thresholds, pack actions, per-user_id override, `dashboard/admin.html`
-- [~] 9. Per-user token usage display — dashboard reads `UserProfile`; nothing populates it yet (see Data Engineer Day2 #5)
+- [x] 9. Per-user token usage display — `/dashboard/user/{id}` sums `TokenUsageEvent` rows live (so tiles don't wait on the manual `user_profile_job.py` run) and returns a per-call `token_usage` series; `user.html` chart is now a line chart of tokens in/out per call. Route-tested (`test_dashboard_user_token_totals_come_from_events_without_the_aggregation_job`, per-user isolation test); not yet eyeballed in a browser with live proxy traffic
 - [ ] 10. Demo script attribution check across both paths
 
 ## Data Engineer (Somu) — Ledger, Pipeline & Storage

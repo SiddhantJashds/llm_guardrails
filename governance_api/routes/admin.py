@@ -12,13 +12,13 @@ import sys
 from pathlib import Path
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # allow `import shared`
 from shared.db import get_db  # noqa: E402
-from shared.models import CompliancePackConfig  # noqa: E402
+from shared.models import AgentTrustState, CompliancePackConfig, Receipt, TokenUsageEvent, UserProfile  # noqa: E402
 
 from access_control.overrides import get_override, list_overrides, set_override
 from authority.policy_gates import list_thresholds, set_threshold
@@ -88,3 +88,23 @@ def get_user_override(user_id: str, db: Session = Depends(get_db)):
 def put_user_override(user_id: str, body: OverrideUpdate, db: Session = Depends(get_db)):
     row = set_override(db, user_id, body.allow_unredacted, body.tool_overrides)
     return {"user_id": row.user_id, "allow_unredacted": row.allow_unredacted, "tool_overrides": row.tool_overrides}
+
+
+class ResetRequest(BaseModel):
+    confirm: str
+
+
+@router.post("/reset")
+def reset_activity(body: ResetRequest, db: Session = Depends(get_db)):
+    """Delete all recorded activity (audit records, trust state, token usage,
+    user profiles) so a demo can start fresh. Policy settings -- thresholds,
+    pack actions, overrides -- are kept. Requires {"confirm": "RESET"} so a
+    stray request can't wipe the ledger; like the rest of /admin it has no
+    auth (docs/adr/0005)."""
+    if body.confirm != "RESET":
+        raise HTTPException(status_code=400, detail='Send {"confirm": "RESET"} to delete all activity data.')
+    deleted = {}
+    for model in (Receipt, AgentTrustState, TokenUsageEvent, UserProfile):
+        deleted[model.__tablename__] = db.query(model).delete()
+    db.commit()
+    return {"deleted": deleted}

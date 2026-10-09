@@ -38,6 +38,7 @@ def write_receipt(
     verdict: str,
     reason: Optional[str],
     ref_id: Optional[str],
+    payload: Optional[dict] = None,
 ) -> Receipt:
     last = (
         db.query(Receipt)
@@ -72,6 +73,10 @@ def write_receipt(
         verdict=verdict,
         reason=reason,
         ref_id=ref_id,
+        # Display-only context for the dashboard (e.g. the REDACTED text a
+        # check produced). Deliberately outside the hashed decision so older
+        # receipts keep verifying; never raw PHI/PII (see governance.py).
+        payload=payload,
     )
     db.add(receipt)
     db.commit()

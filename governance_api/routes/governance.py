@@ -72,6 +72,14 @@ def compliance_check(req: ComplianceCheckRequest, db: Session = Depends(get_db))
         injection_note = f"injection_detected: {', '.join(injection_hits)}"
         reason = f"{reason}; {injection_note}" if reason else injection_note
 
+    # What the dashboard's conversation view shows: the text AFTER governance
+    # cleaned it -- i.e. exactly what travelled onward. Never the raw input:
+    # with an unredacted override the caller gets raw text back, so store a
+    # separately redacted copy instead (receipts must never hold raw PHI/PII).
+    stored_text = cleaned_text if verdict != "block" else None
+    if violations and allow_unredacted and verdict != "block":
+        stored_text = compliance_engine.check(db, req.text, req.pack_id, False)[1]
+
     receipt = write_receipt(
         db,
         user_id=req.identity.user_id,
@@ -82,6 +90,7 @@ def compliance_check(req: ComplianceCheckRequest, db: Session = Depends(get_db))
         verdict=verdict,
         reason=reason,
         ref_id=req.pack_id,
+        payload={"direction": req.direction, "text": stored_text, "scored": req.apply_score},
     )
     return ComplianceCheckResponse(
         verdict=verdict,

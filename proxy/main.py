@@ -31,6 +31,7 @@ if os.path.isfile(_ENV_PATH):
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))  # allow `import shared`
@@ -69,6 +70,26 @@ async def debug_request(request: Request, call_next):
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
+# The dashboard's chat drawer calls this proxy straight from the browser.
+# Only the dashboard's own origins, only POST, and only the identity/pack
+# headers -- `x-request-unredacted` is deliberately NOT allowed, so a page in
+# the browser can never ask for unredacted output (docs/adr/0003).
+DASHBOARD_ORIGINS = [
+    o.strip()
+    for o in os.getenv(
+        "DASHBOARD_ORIGINS",
+        "http://localhost:8080,http://localhost:8081,http://127.0.0.1:8080,http://127.0.0.1:8081",
+    ).split(",")
+    if o.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=DASHBOARD_ORIGINS,
+    allow_methods=["POST"],
+    allow_headers=["content-type", "x-user-id", "x-session-id", "x-agent-id", "x-compliance-pack"],
+)
 
 
 @app.post("/v1/chat/completions")

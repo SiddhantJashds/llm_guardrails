@@ -32,6 +32,35 @@ def _sign(hash_value: str) -> str:
     return hmac.new(SIGNING_SECRET.encode(), hash_value.encode(), hashlib.sha256).hexdigest()
 
 
+def check_chain(receipts: list) -> dict:
+    """Verify one session's receipts (already in timestamp order). Names the
+    first failure: "link" (prev_hash doesn't point at the previous receipt),
+    "hash" (a hashed field was edited), or "signature" (HMAC mismatch)."""
+    prev_hash = GENESIS_HASH
+    for r in receipts:
+        decision = {
+            "user_id": r.user_id,
+            "session_id": r.session_id,
+            "agent_id": r.agent_id,
+            "parent_agent_id": r.parent_agent_id,
+            "decision_type": r.decision_type,
+            "verdict": r.verdict,
+            "reason": r.reason,
+            "ref_id": r.ref_id,
+        }
+        problem = None
+        if r.prev_hash != prev_hash:
+            problem = "link"
+        elif _compute_hash(prev_hash, decision) != r.hash:
+            problem = "hash"
+        elif _sign(r.hash) != r.signature:
+            problem = "signature"
+        if problem:
+            return {"ok": False, "checked": len(receipts), "broken_receipt_id": r.receipt_id, "problem": problem}
+        prev_hash = r.hash
+    return {"ok": True, "checked": len(receipts), "broken_receipt_id": None, "problem": None}
+
+
 def verify_session_chain(session_id: str) -> bool:
     db = SessionLocal()
     try:
@@ -41,28 +70,14 @@ def verify_session_chain(session_id: str) -> bool:
             .order_by(Receipt.timestamp)
             .all()
         )
-        prev_hash = GENESIS_HASH
-        for r in receipts:
-            decision = {
-                "user_id": r.user_id,
-                "session_id": r.session_id,
-                "agent_id": r.agent_id,
-                "parent_agent_id": r.parent_agent_id,
-                "decision_type": r.decision_type,
-                "verdict": r.verdict,
-                "reason": r.reason,
-                "ref_id": r.ref_id,
-            }
-            expected_hash = _compute_hash(prev_hash, decision)
-            if expected_hash != r.hash or r.prev_hash != prev_hash:
-                print(f"TAMPER DETECTED at receipt {r.receipt_id}")
-                return False
-            if _sign(r.hash) != r.signature:
-                print(f"SIGNATURE MISMATCH at receipt {r.receipt_id}")
-                return False
-            prev_hash = r.hash
-        print(f"chain OK: {len(receipts)} receipts verified for session {session_id}")
-        return True
+        result = check_chain(receipts)
+        if result["problem"] == "signature":
+            print(f"SIGNATURE MISMATCH at receipt {result['broken_receipt_id']}")
+        elif not result["ok"]:
+            print(f"TAMPER DETECTED at receipt {result['broken_receipt_id']}")
+        else:
+            print(f"chain OK: {len(receipts)} receipts verified for session {session_id}")
+        return result["ok"]
     finally:
         db.close()
 

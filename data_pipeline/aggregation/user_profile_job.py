@@ -54,6 +54,30 @@ def _effective_use_score(total_tokens: int, completed_tasks: int) -> float:
     return total_tokens / completed_tasks
 
 
+def profile_from_rows(tokens_in: int, tokens_out: int, receipts: list) -> dict:
+    """One user's profile from their token totals and receipts -- shared by
+    run_aggregation() and the live dashboard, so the two can't disagree."""
+    # Excludes "log_only" verdicts on purpose: a log_only-by-design hit
+    # (e.g. DPDP's consent_purpose_flag, docs/adr/0009) already costs
+    # the agent's authority score nothing -- it shouldn't cost the
+    # user's composite_rating anything either, for the same reason.
+    violation_count = sum(
+        1 for r in receipts if r.decision_type == "compliance" and r.verdict not in ("allow", "log_only")
+    )
+    denied_count = sum(1 for r in receipts if r.decision_type == "authority" and r.verdict == "deny")
+    total_checks = len(receipts)
+    completed_tasks = total_checks - violation_count - denied_count
+    return {
+        "total_tokens_in": tokens_in,
+        "total_tokens_out": tokens_out,
+        "violation_count": violation_count,
+        "denied_count": denied_count,
+        "total_checks": total_checks,
+        "composite_rating": _composite_rating(violation_count, denied_count, total_checks),
+        "effective_use_score": _effective_use_score(tokens_in + tokens_out, completed_tasks),
+    }
+
+
 def run_aggregation() -> None:
     db = SessionLocal()
     try:
@@ -63,26 +87,7 @@ def run_aggregation() -> None:
         for user_id in user_ids:
             tokens_in = db.query(func.sum(TokenUsageEvent.tokens_in)).filter(TokenUsageEvent.user_id == user_id).scalar() or 0
             tokens_out = db.query(func.sum(TokenUsageEvent.tokens_out)).filter(TokenUsageEvent.user_id == user_id).scalar() or 0
-            # Excludes "log_only" verdicts on purpose: a log_only-by-design hit
-            # (e.g. DPDP's consent_purpose_flag, docs/adr/0009) already costs
-            # the agent's authority score nothing -- it shouldn't cost the
-            # user's composite_rating anything either, for the same reason.
-            violation_count = (
-                db.query(Receipt)
-                .filter(
-                    Receipt.user_id == user_id,
-                    Receipt.decision_type == "compliance",
-                    Receipt.verdict.notin_(["allow", "log_only"]),
-                )
-                .count()
-            )
-            denied_count = (
-                db.query(Receipt)
-                .filter(Receipt.user_id == user_id, Receipt.decision_type == "authority", Receipt.verdict == "deny")
-                .count()
-            )
-            total_checks = db.query(Receipt).filter(Receipt.user_id == user_id).count()
-            completed_tasks = total_checks - violation_count - denied_count
+            stats = profile_from_rows(tokens_in, tokens_out, db.query(Receipt).filter(Receipt.user_id == user_id).all())
 
             profile = db.get(UserProfile, user_id)
             if profile is None:
@@ -91,9 +96,9 @@ def run_aggregation() -> None:
 
             profile.total_tokens_in = tokens_in
             profile.total_tokens_out = tokens_out
-            profile.violation_count = violation_count
-            profile.composite_rating = _composite_rating(violation_count, denied_count, total_checks)
-            profile.effective_use_score = _effective_use_score(tokens_in + tokens_out, completed_tasks)
+            profile.violation_count = stats["violation_count"]
+            profile.composite_rating = stats["composite_rating"]
+            profile.effective_use_score = stats["effective_use_score"]
 
         db.commit()
         print(f"aggregated profiles for {len(user_ids)} user(s)")

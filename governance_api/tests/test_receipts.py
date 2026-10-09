@@ -72,3 +72,22 @@ def test_verify_chain_detects_forged_signature(db_session):
     db_session.commit()
 
     assert verify_session_chain("sess1") is False
+
+
+def test_check_chain_names_the_failure_kind(db_session):
+    from shared.models import Receipt
+    from data_pipeline.ledger.verify_chain import check_chain
+
+    _write(db_session)
+    _write(db_session)
+    rows = db_session.query(Receipt).order_by(Receipt.timestamp).all()
+    assert check_chain(rows) == {"ok": True, "checked": 2, "broken_receipt_id": None, "problem": None}
+    rows[1].prev_hash = "f" * 64
+    assert check_chain(rows)["problem"] == "link"
+    rows[1].prev_hash = rows[0].hash
+    rows[1].reason = "edited"
+    assert check_chain(rows)["problem"] == "hash"
+    rows[1].reason = None
+    rows[1].signature = "0" * 64
+    out = check_chain(rows)
+    assert out["problem"] == "signature" and out["broken_receipt_id"] == rows[1].receipt_id

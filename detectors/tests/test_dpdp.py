@@ -61,7 +61,7 @@ def test_bare_indian_mobile_is_caught_unlike_hipaas_generic_bare_digits(text):
 
 
 def test_web_url_and_ip_address_are_reused_from_hipaa_pack():
-    """docs/adr/0016 -- these were HIPAA-only even though neither is
+    """docs/adr/0017 -- these were HIPAA-only even though neither is
     healthcare-specific; now shared via overlap_map.yaml."""
     hits = find_dpdp("Visit https://example.com/profile from 203.0.113.7")
     assert "https://example.com/profile" in _spans(hits, "web_url")

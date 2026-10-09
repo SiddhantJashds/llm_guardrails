@@ -1,4 +1,4 @@
-# 0016. DPDP coverage audit: reuse `web_url`/`ip_address` from HIPAA, rest stays out of scope
+# 0017. DPDP coverage audit: reuse `web_url`/`ip_address` from HIPAA, rest stays out of scope
 
 Status: Accepted
 Date: 2026-10-09

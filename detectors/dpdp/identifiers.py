@@ -8,7 +8,7 @@ certificate_license_number, device_identifier, health_plan_beneficiary_number,
 date_except_year, ...) are deliberately NOT reused here -- DPDP has no
 healthcare-record framing and the generic "government ID / bank / payment /
 employment / education / financial" categories in India's DPDP personal-data
-definition don't match those detectors' keyword assumptions; see docs/adr/0016.
+definition don't match those detectors' keyword assumptions; see docs/adr/0017.
 
 `full_name` / `residential_address` are NER-derived and a low-confidence tier,
 same as HIPAA's `full_name` / `geographic_subdivision` (docs/adr/0008).

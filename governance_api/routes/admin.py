@@ -18,7 +18,9 @@ from sqlalchemy.orm import Session
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # allow `import shared`
 from shared.db import get_db  # noqa: E402
-from shared.models import AgentTrustState, CompliancePackConfig, Receipt, TokenUsageEvent, UserProfile  # noqa: E402
+from shared.models import AgentTrustState, CompliancePackConfig, RedactionRole, Receipt, TokenUsageEvent, UserProfile, UserRole  # noqa: E402
+from access_control import roles as roles_mod  # noqa: E402
+from compliance import redaction, vault  # noqa: E402
 
 from access_control.overrides import get_override, list_overrides, set_override
 from authority.policy_gates import list_thresholds, set_threshold
@@ -107,4 +109,123 @@ def reset_activity(body: ResetRequest, db: Session = Depends(get_db)):
     for model in (Receipt, AgentTrustState, TokenUsageEvent, UserProfile):
         deleted[model.__tablename__] = db.query(model).delete()
     db.commit()
+    vault.clear()  # placeholder mappings belong to the deleted sessions
     return {"deleted": deleted}
+
+
+
+# ---------------------------------------------------------------------------
+# Redaction options and roles (docs/adr/0016)
+# ---------------------------------------------------------------------------
+
+class IdentifierPolicyUpdate(BaseModel):
+    action: Optional[Literal["redact", "block", "hash", "log_only"]] = None
+    style: Optional[Literal["token", "partial", "masked"]] = None
+    keep_last: Optional[int] = None
+    restore_to_sender: Optional[bool] = None
+    applies_to: Optional[Literal["both", "inbound", "outbound"]] = None
+
+
+@router.get("/identifier-policy/{pack_id}")
+def get_identifier_policy(pack_id: str, db: Session = Depends(get_db)):
+    rows = db.query(CompliancePackConfig).filter(CompliancePackConfig.pack_id == pack_id).all()
+    out = []
+    for r in sorted(rows, key=lambda r: r.identifier):
+        p = redaction.policy_for(db, pack_id, r.identifier)
+        out.append({
+            "identifier": r.identifier,
+            "action": r.action,
+            "style": p.style,
+            "keep_last": p.keep_last,
+            "restore_to_sender": p.restore_to_sender,
+            "applies_to": p.applies_to,
+            "placeholder": f"[{vault.label_for(r.identifier)}_1]",
+        })
+    return out
+
+
+@router.put("/identifier-policy/{pack_id}/{identifier}")
+def put_identifier_policy(pack_id: str, identifier: str, body: IdentifierPolicyUpdate, db: Session = Depends(get_db)):
+    if body.keep_last is not None and not 0 <= body.keep_last <= 12:
+        raise HTTPException(status_code=400, detail="keep_last must be between 0 and 12.")
+    row = db.get(CompliancePackConfig, (pack_id, identifier))
+    if row is None:
+        row = CompliancePackConfig(pack_id=pack_id, identifier=identifier, action=body.action or "redact")
+        db.add(row)
+    if body.action is not None:
+        row.action = body.action
+    cfg = dict(row.config or {})
+    for key in ("style", "keep_last", "restore_to_sender", "applies_to"):
+        value = getattr(body, key)
+        if value is not None:
+            cfg[key] = value
+    row.config = cfg
+    db.commit()
+    return get_identifier_policy(pack_id, db)
+
+
+class RoleUpdate(BaseModel):
+    label: str
+    description: Optional[str] = None
+    default_level: Literal["hidden", "partial", "full"] = "hidden"
+    visibility: dict = {}
+
+
+@router.get("/roles")
+def list_roles(db: Session = Depends(get_db)):
+    roles_mod.ensure_defaults(db)
+    return [roles_mod.as_dict(r) for r in db.query(RedactionRole).order_by(RedactionRole.role_id).all()]
+
+
+@router.put("/roles/{role_id}")
+def put_role(role_id: str, body: RoleUpdate, db: Session = Depends(get_db)):
+    bad = {k: v for k, v in body.visibility.items() if v not in roles_mod.LEVELS}
+    if bad:
+        raise HTTPException(status_code=400, detail=f"Visibility levels must be one of {', '.join(roles_mod.LEVELS)}.")
+    roles_mod.ensure_defaults(db)
+    row = db.get(RedactionRole, role_id)
+    if row is None:
+        row = RedactionRole(role_id=role_id, label=body.label)
+        db.add(row)
+    row.label, row.description, row.default_level, row.visibility = body.label, body.description, body.default_level, body.visibility
+    db.commit()
+    return roles_mod.as_dict(row)
+
+
+@router.delete("/roles/{role_id}")
+def delete_role(role_id: str, db: Session = Depends(get_db)):
+    row = db.get(RedactionRole, role_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="No such role.")
+    unassigned = db.query(UserRole).filter(UserRole.role_id == role_id).delete()
+    db.delete(row)
+    db.commit()
+    return {"deleted": role_id, "users_unassigned": unassigned}
+
+
+class UserRoleUpdate(BaseModel):
+    role_id: Optional[str] = None
+
+
+@router.get("/user-roles")
+def list_user_roles(db: Session = Depends(get_db)):
+    return [{"user_id": r.user_id, "role_id": r.role_id} for r in db.query(UserRole).order_by(UserRole.user_id).all()]
+
+
+@router.put("/user-roles/{user_id}")
+def put_user_role(user_id: str, body: UserRoleUpdate, db: Session = Depends(get_db)):
+    roles_mod.ensure_defaults(db)
+    row = db.get(UserRole, user_id)
+    if body.role_id is None:
+        if row is not None:
+            db.delete(row)
+            db.commit()
+        return {"user_id": user_id, "role_id": None}
+    if db.get(RedactionRole, body.role_id) is None:
+        raise HTTPException(status_code=404, detail=f"No role '{body.role_id}'.")
+    if row is None:
+        row = UserRole(user_id=user_id, role_id=body.role_id)
+        db.add(row)
+    row.role_id = body.role_id
+    db.commit()
+    return {"user_id": user_id, "role_id": row.role_id}

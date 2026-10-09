@@ -61,20 +61,30 @@ def _action_for(db: Session, pack_id: str, identifier: str) -> str:
     return row.action if row is not None else "redact"  # fail toward the safer action
 
 
-def check(db: Session, text: str, pack_id: str, allow_unredacted: bool = False) -> Tuple[Verdict, str, List[str]]:
-    violations = _run_detectors(text, pack_id)
-    if not violations:
-        return "allow", text, []
-
-    cleaned = text
-    verdict: Verdict = "log_only"
-    for identifier, span in violations:
+def planned_actions(db: Session, text: str, pack_id: str) -> List[Tuple[str, str, str]]:
+    """[(identifier, matched_span, action), ...] -- detection plus the
+    configured action per identifier, with the never-block downgrade applied.
+    Shared by check() below and compliance/redaction.py (docs/adr/0016)."""
+    planned = []
+    for identifier, span in _run_detectors(text, pack_id):
         action = _action_for(db, pack_id, identifier)
         if action == "block" and identifier in _NEVER_BLOCK:
             # A statistical hit must never kill the whole response (nor, via an
             # admin misconfig, turn a false positive into a hard denial).
             action = "redact"
+        planned.append((identifier, span, action))
+    return planned
 
+
+def check(db: Session, text: str, pack_id: str, allow_unredacted: bool = False) -> Tuple[Verdict, str, List[str]]:
+    planned = planned_actions(db, text, pack_id)
+    if not planned:
+        return "allow", text, []
+    violations = [(identifier, span) for identifier, span, _ in planned]
+
+    cleaned = text
+    verdict: Verdict = "log_only"
+    for identifier, span, action in planned:
         if action == "block":
             # block is never overridable by allow_unredacted.
             return "block", "", [name for name, _ in violations]

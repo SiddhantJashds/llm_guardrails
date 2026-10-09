@@ -20,11 +20,12 @@ from shared.schemas import (  # noqa: E402
 
 from detectors.injection.heuristics import detect as detect_injection  # noqa: E402
 from detectors.scoring.signals import phi_signal  # noqa: E402
-from access_control.overrides import is_unredacted_allowed
+from access_control import roles
 from authority.engine import AuthorityEngine, DEFAULT_SCORE
 from shared.models import AgentTrustState
 from authority.policy_gates import required_threshold, DEFAULT_THRESHOLD
 from compliance import engine as compliance_engine
+from compliance import redaction
 from receipts.writer import write_receipt
 
 router = APIRouter(prefix="/governance", tags=["governance"])
@@ -46,8 +47,25 @@ def _apply_signals(
 
 @router.post("/compliance-check", response_model=ComplianceCheckResponse)
 def compliance_check(req: ComplianceCheckRequest, db: Session = Depends(get_db)):
-    allow_unredacted = is_unredacted_allowed(db, req.identity.user_id, req.request_unredacted)
-    verdict, cleaned_text, violations = compliance_engine.check(db, req.text, req.pack_id, allow_unredacted)
+    # docs/adr/0016: the model always gets placeholders; what the requesting
+    # person sees back can be restored (their own opted-in values) or opened
+    # up by their role -- the role only applies with the explicit ask (ADR 0003).
+    detected = {name for name, _, _ in compliance_engine.planned_actions(db, req.text, req.pack_id)}
+    visibility = roles.visibility_for(db, req.identity.user_id, req.request_unredacted, detected)
+    result = redaction.process(
+        db,
+        req.text,
+        req.pack_id,
+        session_id=req.identity.session_id,
+        user_id=req.identity.user_id,
+        direction=req.direction,
+        scored=req.apply_score,
+        restore_to_sender=req.restore_to_sender,
+        visibility=visibility,
+    )
+    verdict, violations = result.verdict, result.violations
+    # Inbound text goes to the model; outbound text goes to the person.
+    cleaned_text = result.model_text if req.direction == "inbound" else result.display_text
 
     # Prompt-injection phrasing ("ignore previous instructions", a forged
     # "as the supervisor" role claim, ...) is a risk on untrusted INPUT --
@@ -66,20 +84,16 @@ def compliance_check(req: ComplianceCheckRequest, db: Session = Depends(get_db))
         _apply_signals(engine, req.identity.agent_id, req.identity.session_id, violations, injection_hits)
 
     reason = ", ".join(violations) if violations else None
-    if violations and allow_unredacted:
-        reason = f"{reason} [unredacted_override_applied: user_id={req.identity.user_id}]"
+    if violations and result.role_view_applied:
+        who = roles.describe(db, req.identity.user_id)
+        note = "unredacted_override_applied" if who == "override" else f"role_view_applied: {who}"
+        reason = f"{reason} [{note}: user_id={req.identity.user_id}]"
     if injection_hits:
         injection_note = f"injection_detected: {', '.join(injection_hits)}"
         reason = f"{reason}; {injection_note}" if reason else injection_note
 
-    # What the dashboard's conversation view shows: the text AFTER governance
-    # cleaned it -- i.e. exactly what travelled onward. Never the raw input:
-    # with an unredacted override the caller gets raw text back, so store a
-    # separately redacted copy instead (receipts must never hold raw PHI/PII).
-    stored_text = cleaned_text if verdict != "block" else None
-    if violations and allow_unredacted and verdict != "block":
-        stored_text = compliance_engine.check(db, req.text, req.pack_id, False)[1]
-
+    # The receipt keeps only what the MODEL side saw (placeholders / masks),
+    # never raw values and never the restored display text (ADR 0015/0016).
     receipt = write_receipt(
         db,
         user_id=req.identity.user_id,
@@ -90,7 +104,12 @@ def compliance_check(req: ComplianceCheckRequest, db: Session = Depends(get_db))
         verdict=verdict,
         reason=reason,
         ref_id=req.pack_id,
-        payload={"direction": req.direction, "text": stored_text, "scored": req.apply_score},
+        payload={
+            "direction": req.direction,
+            "text": result.model_text if verdict != "block" else None,
+            "scored": req.apply_score,
+            "entities": result.entities,
+        },
     )
     return ComplianceCheckResponse(
         verdict=verdict,
@@ -98,6 +117,9 @@ def compliance_check(req: ComplianceCheckRequest, db: Session = Depends(get_db))
         violations=violations,
         injection_hits=injection_hits,
         receipt_id=receipt.receipt_id,
+        model_text=result.model_text,
+        display_text=result.display_text,
+        entities=result.entities,
     )
 
 
@@ -168,6 +190,25 @@ def handoff_check(req: HandoffCheckRequest, db: Session = Depends(get_db)):
                 f"session-level block: lowest score {worst.current_score:.1f} "
                 f"(agent_id={worst.agent_id}) below threshold"
             )
+
+    if violations:
+        write_receipt(
+            db,
+            user_id=req.identity.user_id,
+            session_id=req.identity.session_id,
+            agent_id=req.identity.agent_id,
+            parent_agent_id=req.identity.parent_agent_id,
+            decision_type="compliance",
+            verdict=verdict,
+            reason=", ".join(violations),
+            ref_id=req.pack_id,
+            payload={
+                "direction": "outbound",
+                "text": _cleaned if verdict != "block" else None,
+                "scored": True,
+                "entities": [{"type": v, "action": "redact"} for v in violations],
+            },
+        )
 
     receipt = write_receipt(
         db,

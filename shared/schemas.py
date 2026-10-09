@@ -30,6 +30,12 @@ class ComplianceCheckRequest(BaseModel):
     # authorized to see, not agent misbehavior -- penalizing it bricks
     # legitimate read-then-use workflows (bench scenario 1 proved this).
     apply_score: bool = True
+    # Trusted-caller opt-in (docs/adr/0016): this inbound text was typed by the
+    # end user themselves, so identifiers in it may be restored when the reply
+    # comes back to that same user. Never set it for text that includes
+    # retrieved/third-party data (RAG context, tool output) -- the proxy only
+    # sets it for user-role messages when the client sends x-restore-to-sender.
+    restore_to_sender: bool = False
 
 
 class ComplianceCheckResponse(BaseModel):
@@ -41,6 +47,13 @@ class ComplianceCheckResponse(BaseModel):
     # Additive field, default [] -- existing callers unaffected.
     injection_hits: List[str] = []
     receipt_id: str
+    # docs/adr/0016. model_text: what goes to the model (placeholders, never
+    # raw values). display_text: what the requesting person sees (own values
+    # restored, role view applied). cleaned_text keeps its old meaning: the
+    # model_text for inbound checks, the display_text for outbound checks.
+    model_text: Optional[str] = None
+    display_text: Optional[str] = None
+    entities: List[dict] = []
 
 
 class ToolCheckRequest(BaseModel):

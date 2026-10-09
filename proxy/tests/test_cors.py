@@ -22,6 +22,9 @@ def test_foreign_origin_preflight_refused(proxy_client):
     assert "access-control-allow-origin" not in resp.headers
 
 
-def test_unredacted_header_not_allowed_from_browser(proxy_client):
-    resp = _preflight(proxy_client, "http://localhost:8081", headers="content-type,x-request-unredacted")
-    assert resp.status_code == 400
+def test_view_headers_allowed_but_unknown_headers_refused(proxy_client):
+    # docs/adr/0016: x-request-unredacted / x-restore-to-sender may come from the
+    # dashboard; what they reveal is capped server-side by the user's role.
+    ok = _preflight(proxy_client, "http://localhost:8081", headers="content-type,x-request-unredacted,x-restore-to-sender")
+    assert ok.status_code == 200
+    assert _preflight(proxy_client, "http://localhost:8081", headers="content-type,x-something-else").status_code == 400

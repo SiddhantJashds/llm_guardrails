@@ -222,7 +222,7 @@ def test_conversation_stores_only_redacted_text_and_dedupes_history(client):
     turns = body["conversation"]
     assert [t["kind"] for t in turns] == ["input", "output", "tool_result"]
     assert "555-123-4567" not in json.dumps(body) and "555-987-6543" not in json.dumps(body)
-    assert "[REDACTED]" in turns[0]["text"]
+    assert "[PHONE_1]" in turns[0]["text"]  # typed placeholder, never the raw number
     assert body["chain"]["ok"] is True  # payload is outside the hashed decision
 
 

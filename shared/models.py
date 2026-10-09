@@ -134,3 +134,30 @@ class UserAccessOverride(Base):
     allow_unredacted = Column(Boolean, default=False, nullable=False)
     tool_overrides = Column(JSON, nullable=True)  # optional {"tool_id": threshold_override}
     updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+
+class RedactionRole(Base):
+    """A named view policy for people who may see more than placeholders
+    (docs/adr/0016). `visibility` maps identifier -> "hidden" | "partial" |
+    "full"; identifiers not listed fall back to `default_level`. A role is a
+    CAP: it only takes effect when the request also explicitly asks for an
+    unredacted view (ADR 0003), and it never relaxes block or hash actions."""
+
+    __tablename__ = "redaction_roles"
+
+    role_id = Column(String, primary_key=True)
+    label = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    default_level = Column(String, nullable=False, default="hidden")
+    visibility = Column(JSON, nullable=True)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+
+class UserRole(Base):
+    """Admin-assigned role per user_id. Config only, no login (docs/adr/0005)."""
+
+    __tablename__ = "user_roles"
+
+    user_id = Column(String, primary_key=True)
+    role_id = Column(String, nullable=False)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)

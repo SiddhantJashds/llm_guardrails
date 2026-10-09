@@ -72,10 +72,11 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(status_code=422, content={"detail": str(exc)})
 
 
-# The dashboard's chat drawer calls this proxy straight from the browser.
-# Only the dashboard's own origins, only POST, and only the identity/pack
-# headers -- `x-request-unredacted` is deliberately NOT allowed, so a page in
-# the browser can never ask for unredacted output (docs/adr/0003).
+# The dashboard's test console calls this proxy straight from the browser.
+# Only the dashboard's own origins, only POST, and only the identity/pack/view
+# headers. `x-request-unredacted` is allowed since docs/adr/0016: what it can
+# reveal is capped server-side by the user's role (or legacy override), and
+# CORS was never a boundary for non-browser clients anyway.
 DASHBOARD_ORIGINS = [
     o.strip()
     for o in os.getenv(
@@ -88,7 +89,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=DASHBOARD_ORIGINS,
     allow_methods=["POST"],
-    allow_headers=["content-type", "x-user-id", "x-session-id", "x-agent-id", "x-compliance-pack"],
+    allow_headers=["content-type", "x-user-id", "x-session-id", "x-agent-id", "x-compliance-pack", "x-restore-to-sender", "x-request-unredacted"],
 )
 
 
@@ -113,6 +114,11 @@ async def chat_completions(request: Request):
     # prompt/completion text itself (that would let injected text grant its
     # own unredaction; see docs/adr/0005 and docs/HACKATHON_PLAN.md hardening #2).
     request_unredacted = request.headers.get("x-request-unredacted", "false").lower() == "true"
+    # docs/adr/0016: the client vouches that user-role messages contain only
+    # the end user's own typed text, so their identifiers may be restored in
+    # the reply to that same user. Never set this from a RAG/agent app whose
+    # user messages include retrieved third-party data.
+    restore_to_sender = request.headers.get("x-restore-to-sender", "false").lower() == "true"
 
     # Which compliance pack to run (HIPAA vs DPDP): same rule -- a header set
     # by the caller's trusted code, never read from the message text.
@@ -124,7 +130,7 @@ async def chat_completions(request: Request):
         )
 
     async with httpx.AsyncClient(timeout=10.0) as client:
-        async def check(text: str, direction: str) -> dict:
+        async def check(text: str, direction: str, restore: bool = False) -> dict:
             print(f"[DEBUG] compliance-check dir={direction} text_len={len(text)}")
             return _fail_closed(
                 await client.post(
@@ -135,6 +141,7 @@ async def chat_completions(request: Request):
                         "direction": direction,
                         "pack_id": pack_id,
                         "request_unredacted": request_unredacted,
+                        "restore_to_sender": restore,
                     },
                 )
             )
@@ -143,8 +150,10 @@ async def chat_completions(request: Request):
         segments = _prompt_segments(body)
         print(f"[DEBUG] step1: inbound check, segments={len(segments)}")
         cleaned_parts = []
-        for _, (_kind, _idx, text) in segments:
-            result = await check(text, "inbound")
+        messages = body.get("messages") or []
+        for item, (_kind, _idx, text) in segments:
+            role = messages[item].get("role") if isinstance(item, int) and item < len(messages) and isinstance(messages[item], dict) else None
+            result = await check(text, "inbound", restore=restore_to_sender and role == "user")
             print(f"[DEBUG] compliance verdict={result['verdict']}")
             if result["verdict"] == "block":
                 return _blocked(result)
@@ -183,7 +192,7 @@ async def chat_completions(request: Request):
         print(f"[DEBUG] step3: outbound check, segments={len(segments)}")
         cleaned_parts = []
         for _, (_kind, _idx, text) in segments:
-            result = await check(text, "outbound")
+            result = await check(text, "outbound", restore=restore_to_sender)
             print(f"[DEBUG] outbound verdict={result['verdict']}")
             if result["verdict"] == "block":
                 return _blocked(result)

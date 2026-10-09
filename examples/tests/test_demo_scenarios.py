@@ -36,12 +36,6 @@ def test_full_script_runs_both_paths_in_order(demo_http):
     demo.run_langgraph_path(demo_http)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="handoff-check writes only an `authority` receipt, so a leak it detects and penalizes never reaches the "
-    "dashboard's compliance-violations table (it shows only as a score drop). Fix in governance_api/routes/"
-    "governance.py::handoff_check (also write a `compliance` receipt) and remove this marker.",
-)
 def test_langgraph_leak_appears_in_the_dashboards_violations_table(demo_http):
     d = demo.Demo(demo_http)
     orchestrator_id, worker_id = demo._lg_ids("xfail")

@@ -53,8 +53,28 @@ uv run python run_all.py --report reports/bridge-run3.json
 ```
 
 `run_all.py` reuses whatever is already on `:8080` (the bridge), builds
-`chroma_db/` if missing, starts the bench on `:8000`, runs
-`scripts/check_contract.py` (5/5 shape checks), then the suite.
+`chroma_db/` if missing, starts the bench on `:8000` (or reuses the one
+`run.sh` already started there), runs `scripts/check_contract.py` (5/5 shape
+checks), then the suite.
+
+## In the dashboard
+
+- **Live bench** (`#/live`): the bridge keeps every hook call in an in-memory
+  feed (`GET /live/events?after=<seq>`, outcome plus the cleaned text only,
+  never raw input; CORS allows the dashboard origins, read-only). The view
+  polls it every 1.5s while `run_all.py` runs, groups events into runs by the
+  per-run user suffix (`alice-ce70` -> run `ce70`), and links the report once
+  it's written.
+- **Evaluations** (`#/bench`): every report in `GuardRailBench-Sample/reports`
+  (override with `BENCH_REPORTS_DIR` for `governance_api`), a scenario-by-run
+  matrix, checks, and each scenario's full hook log on demand.
+- **Token usage**: `on_completion_received` records the bench's
+  `prompt_tokens`/`completion_tokens` per user/session/agent, so bench users
+  have real token numbers.
+- **Test console**: in bench mode `run.sh` also starts the GuardRailBench
+  sample apps on `:8000` (when `../GuardRailBench-Sample` with its `.venv`
+  exists), so the console can run the multi-agent, single-agent and RAG apps
+  through `governance_api`'s `/playground/bench/*` forwarder.
 
 ## Startup-ordering gotcha (fixed)
 

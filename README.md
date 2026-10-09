@@ -34,13 +34,13 @@ shared/            DB connection, ORM models, identity envelope, API schemas -- 
 governance_sdk/    pip-installable client: GovernanceClient, @governed_tool, @governed_node, LangChain/LangGraph integrations   [SWE #1 -- Sauda]
 proxy/             OpenAI-compatible reverse proxy (single-LLM-call integration point)                                          [SWE #1 -- Sauda]
 governance_api/    Authority engine, compliance engine, receipt writer, /governance/* and /dashboard/* REST API                 [SWE #2 -- Harsh]
-dashboard/         Static HTML/JS/CSS dashboard (session view + per-user view), no build step                                    [SWE #2 -- Harsh]
+dashboard/         Governance console: static ES-module SPA, vendored Chart.js/icons/fonts, no build step                      [SWE #2 -- Harsh]
 data_pipeline/     Ledger chain verification, token-usage ingestion, user-profile aggregation, compliance pack config, benchmarking [Data Engineer -- Somu]
 detectors/         HIPAA/DPDP identifier detectors, prompt-injection heuristics, trust-score signal table                        [Data Scientist -- Siddhant]
 examples/          Reference agents: stateless chat, memory chat (LangGraph checkpointer), RAG, LangChain single-agent, LangGraph multi-agent
 bench_bridge/      GuardRailBench hook-contract adapter (`/api/v1/*` on :8080 → governance_api) -- see docs/BENCH_BRIDGE.md
 scripts/           init_db.py -- creates tables + seeds compliance pack config from data_pipeline/config/*.yaml
-run.sh             One-command startup (uv): reads WITH_BRIDGE from .env, starts api/proxy/dashboard (+bridge in bench mode)
+run.sh             One-command startup (uv): reads WITH_BRIDGE from .env, starts api/proxy/dashboard (+bridge and GuardRailBench apps in bench mode)
 ```
 
 Every file with a `TODO` is a placeholder — the shapes, wiring, and interfaces are real; the detection/scoring logic inside them is not.
@@ -76,22 +76,38 @@ uv run examples/chat_memory.py      # same path + LangGraph-checkpoint memory
 docker compose up --build
 ```
 
-## Viewing the dashboard
+## Governance console (dashboard)
 
-The dashboard is static HTML/JS — no build step, no framework. With `governance_api` running on `:8001`:
+`./run.sh` serves it on `:8080` (`:8081` in bench mode). Open `http://localhost:8080/` — everything
+loads by itself, no ids to type. It's static HTML/CSS/ES modules with no build step and no CDN:
+Chart.js 4.5.1, Material Icons, Inter and JetBrains Mono live in `dashboard/static/vendor/` (licenses
+beside them), so it works offline. It reads `governance_api` on `:8001`; point it elsewhere with
+`?api=http://host:port` in the URL.
 
-```bash
-cd dashboard && python -m http.server 8080
-```
+| Page | What it shows |
+|---|---|
+| **Overview** | Decisions, sessions, users, redactions, blocks, denials, tokens; audit-integrity status (every session's receipt chain re-hashed and signature-checked); the most recent audit records; decision volume over time; detected identifier types; recent sessions and decisions |
+| **Sessions** / **Session** | Every session ever recorded, searchable and sortable. A session shows its agents as a delegation tree with real trust trajectories (including the delegation-cap starting score), the conversation as forwarded after redaction, detected identifiers, denied tool calls, and every decision with its record hash. Select an agent to filter to it |
+| **Users** / **User** | Every user with a live composite rating (same formulas as `user_profile_job.py`), token usage over time, outcome mix, their sessions and decision history |
+| **Audit ledger** | Every signed, hash-chained receipt, filterable and paged |
+| **Live bench** | A GuardRailBench run as it happens (`python run_all.py`): runs grouped by the bench's per-run user suffix, live counts, every hook event with its cleaned text; links the run's report once written |
+| **Evaluations** | Every GuardRailBench report: scenario pass/fail matrix across runs, checks, request/response text, per-hook input/output logs, links to the sessions each scenario produced |
+| **Policy settings** | Tool thresholds, HIPAA/DPDP identifier actions, unredacted overrides (see [Admin portal](#admin-portal)), and **Reset activity data** |
 
-Then open:
-- `http://localhost:8080/index.html` — **session view**: enter a `session_id` (e.g. one printed by `examples/chat_interface.py`, or `sess_test1` from a manual `curl`) and click Load. Shows the live authority-score trend line per `agent_id`, the compliance-violations list, and the denied-tool-calls list, all attributed per agent.
-- `http://localhost:8080/user.html` — **per-user view**: enter a `user_id` and click Load. Shows token usage, composite trust rating, effective-use score, violation count, and recent decision history for that user.
-- `http://localhost:8080/admin.html` — **admin**: see [Admin portal](#admin-portal) below.
+**Test console** (sidebar): a docked, resizable panel. The mode dropdown covers chat through the
+proxy (with memory or single turn), the GuardRailBench sample apps (multi-agent workflow, single
+agent with tools, RAG chatbot — bench mode only), and direct governance checks with no model
+(compliance check, tool permission, handoff). Replies render Markdown safely (escaped first). Start a
+new session, a new conversation in the same session, or load any existing session and continue it.
+The **Sample cases** tab runs 25 one-click cases — allowed, redacted (including hash), blocked,
+denied, and edge cases such as zero-width-character injection, forged role claims, an unknown pack,
+the unredacted override and chain integrity — each in a fresh session that you can open and inspect.
+"Run all checks" runs the 22 that need no model.
 
-If `governance_api` isn't on `localhost:8001`, set `window.GOVERNANCE_API_BASE_URL` at the top of `dashboard/static/js/api.js` (or inject it via a `<script>` tag before `api.js` loads) instead of editing the fetch calls directly.
-
-The charts and status colors follow a colorblind-validated palette (see `dashboard/static/css/style.css`'s CSS custom properties) — if you add a new chart, keep using those `--series-*`/`--status-*` tokens rather than picking new colors ad hoc.
+Sessions only show conversation text for checks made after message capture was added; the text is
+always the redacted version the model received, never the raw input
+([docs/adr/0015](docs/adr/0015-governance-console.md)). The old `user.html`/`admin.html` links
+redirect into the console.
 
 ## Integrating a RAG application
 
@@ -119,11 +135,13 @@ That's the entire integration. Both the retrieved context and the model's answer
 
 ## Admin portal
 
-There's no login and no role/permission system — see [docs/adr/0005](docs/adr/0005-user-identity-no-auth.md) for why, given the problem statement's explicit non-goal on auth/identity management. What exists instead is a **config-only** admin page at `dashboard/admin.html` (open it after starting `governance_api` and the dashboard's static server, per [Viewing the dashboard](#viewing-the-dashboard)):
+There's no login and no role/permission system — see [docs/adr/0005](docs/adr/0005-user-identity-no-auth.md) for why, given the problem statement's explicit non-goal on auth/identity management. What exists instead is a **config-only** **Policy settings** page in the console (`index.html#/admin`; the old `dashboard/admin.html` redirects there):
 
 - **Per-tool authority thresholds** — edit the score a tool requires (e.g. `sql_query_tool: 75`) and save; takes effect on the next `/governance/tool-check` immediately, no restart needed.
 - **HIPAA / DPDP pack actions** — change what happens when an identifier is found (`redact` / `block` / `hash` / `log_only`) per identifier, per pack.
 - **Per-`user_id` unredacted override** — every user is fully restrictive by default (redact always wins). Enter a `user_id`, check "allow unredacted", save. This alone does **not** unmask anything — the caller must *also* send `x-request-unredacted: true` on that specific request (see `proxy/main.py`). Both are required, matching the "redact by default, explicit ask to see it" rule from the kickoff meeting ([docs/adr/0003](docs/adr/0003-redact-by-default.md)). `block`/`hash` identifiers (SSN, Aadhaar, etc.) are never affected by this override.
+
+- **Reset activity data** — deletes all audit records, trust state, token usage and user profiles for a fresh demo (type `RESET` to confirm); policy settings are kept. `POST /admin/reset` with `{"confirm": "RESET"}`.
 
 All of this is backed by `governance_api/routes/admin.py` if you'd rather script changes than click through the page — e.g. `curl -X PUT localhost:8001/admin/users/demo_user -d '{"allow_unredacted": true}'`.
 
@@ -147,8 +165,8 @@ Two Claude Code skills live in `.claude/skills/` for this project:
 | HIPAA / DPDP identifier detectors + overlap map | `detectors/hipaa/`, `detectors/dpdp/`, `data_pipeline/config/overlap_map.yaml` |
 | Prompt-injection heuristics | `detectors/injection/heuristics.py` |
 | Per-user token usage + composite rating | `data_pipeline/ingestion/`, `data_pipeline/aggregation/user_profile_job.py` |
-| Dashboard (session + per-user view) | `dashboard/index.html`, `dashboard/user.html` |
-| Admin config (thresholds, pack actions, per-user_id override) | `governance_api/routes/admin.py`, `governance_api/access_control/`, `dashboard/admin.html` |
+| Dashboard (governance console: overview, sessions, users, ledger, live bench, evaluations, test console) | `dashboard/`, `governance_api/routes/dashboard.py`, `governance_api/insights/` |
+| Admin config (thresholds, pack actions, per-user_id override, data reset) | `governance_api/routes/admin.py`, `governance_api/access_control/`, `dashboard/static/js/views/admin.js` |
 | Latency benchmarking | `data_pipeline/benchmark/benchmark_latency.py` |
 | Automated tests + CI | `governance_api/tests/`, `detectors/tests/`, `.github/workflows/tests.yml` |
 | Memory chat (LangGraph checkpointer, still via proxy) | `examples/chat_memory.py` |

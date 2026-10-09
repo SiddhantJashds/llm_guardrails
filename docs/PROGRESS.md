@@ -42,7 +42,7 @@ Last updated: 2026-10-09 (bench integration: `bench_bridge/` serves the GuardRai
 - [x] 2. Monotonic reduction — `apply_signal` only ever subtracts
 - [x] 3. Governance REST API (`/governance/tool-check`, `/compliance-check`, `/handoff-check`) — implemented and smoke-tested
 - [x] 4. Dashboard backend (`GET /dashboard/session/{id}`) — implemented and smoke-tested
-- [ ] 5. End-to-end demo: score visibly drops after a real violation, next call denied (blocked on detectors being wired in — see SWE#1 Day1 #10 / Data Scientist Day1 #4)
+- [x] 5. End-to-end demo: score visibly drops after a real violation, next call denied — verified via `governance_api/tests/test_demo_scenarios.py` (all 8 scenarios pass: detector catches PHI → score drops via `apply_signal` → `tool-check` denies below threshold)
 
 **Day 2**
 - [x] 6. Per-tool thresholds admin-editable (not hardcoded) — `ToolThresholdConfig`, `/admin/tool-thresholds`

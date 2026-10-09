@@ -76,7 +76,7 @@ PATTERNS: dict[str, Any] = {  # compiled `re` (or `regex`) patterns, all exposin
         re.IGNORECASE,
     ),
     "medical_record_number": re.compile(
-        r"\bMRN[:\s#]*\d{5,10}\b", re.IGNORECASE
+        r"\bMRN[:\s#-]*\d{5,10}\b", re.IGNORECASE  # MRN 123 / MRN: / MRN# / MRN-000673941 (bench records)
     ),
 
     # ------------------------------------------------ Account / Certificate / Vehicle / Device

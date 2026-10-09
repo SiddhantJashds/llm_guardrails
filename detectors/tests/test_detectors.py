@@ -37,3 +37,11 @@ def test_injection_detects_forged_identity():
 def test_clean_text_has_no_hits():
     assert find_hipaa("The weather is nice today.") == []
     assert detect_injection("The weather is nice today.") == []
+
+
+def test_hipaa_detects_medical_record_number_in_every_written_form():
+    # "MRN-000673941" is how the GuardRailBench patient records write it; the
+    # hyphenated form used to slip past the hash action entirely.
+    for text in ("MRN 00481923", "MRN: 00481923", "MRN#00481923", "MRN-000673941", "mrn-000481923"):
+        hits = find_hipaa(f"Record {text} was updated.")
+        assert any(name == "medical_record_number" for name, _ in hits), text

@@ -17,6 +17,7 @@ purpose-limitation statement is present, not PII itself -- its action is
 always `log_only` and it costs the agent nothing (see
 detectors/scoring/signals.py's NO_SIGNAL_IDENTIFIERS).
 """
+from detectors.extended import find_extended
 import re
 from typing import List, Tuple
 
@@ -28,7 +29,7 @@ PATTERNS = {
     "email_address": HIPAA_PATTERNS["email_address"],
     "web_url": HIPAA_PATTERNS["web_url"],
     "ip_address": HIPAA_PATTERNS["ip_address"],
-    "aadhaar_like": re.compile(r"\b\d{4}\s?\d{4}\s?\d{4}\b"),
+    "aadhaar_like": re.compile(r"(?<![\d-])(?<!\d )\d{4}\s?\d{4}\s?\d{4}(?![ -]?\d)"),  # not inside a 16-digit card
     "pan_like": re.compile(r"\b[A-Z]{5}\d{4}[A-Z]\b"),
 }
 
@@ -98,6 +99,8 @@ def find_all(text: str) -> List[Tuple[str, str]]:
     # NER-derived, low-confidence (detectors/scoring/signals.py). Places only
     # approximate `residential_address` at city/county level; see
     # _find_street_address above for the house-number/street-name layer.
+    # Payment, device, document and record IDs shared by both packs (detectors/extended.py).
+    violations.extend(find_extended(text))
     violations.extend(ner.find_names(text))
     violations.extend(ner.find_locations(text, identifier="residential_address"))
     return violations

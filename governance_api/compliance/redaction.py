@@ -11,6 +11,7 @@
 Detection and the action per identifier come from compliance/engine.py
 (deterministic, ADR 0004); this module only decides how a value is shown.
 """
+import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
@@ -33,7 +34,11 @@ class Policy:
 
 
 def policy_for(db: Session, pack_id: str, identifier: str) -> Policy:
-    row = db.get(CompliancePackConfig, (pack_id, identifier))
+    row = None
+    for p in (("hipaa", "dpdp") if pack_id == engine.COMBINED_PACK else (pack_id,)):
+        row = db.get(CompliancePackConfig, (p, identifier))
+        if row is not None:
+            break
     cfg = (row.config or {}) if row is not None else {}
     p = Policy()
     if cfg.get("style") in STYLES:
@@ -77,6 +82,19 @@ class Result:
     violations: List[str]
     entities: List[dict]
     role_view_applied: bool = False
+    # Violations that count against the agent's score: the user's own typed
+    # lookup keys echoed back by the model are masked but not penalised.
+    scored_violations: Optional[List[str]] = None
+
+
+# Lookup keys the end user typed themselves -- a name, an email, an MRN -- reach
+# the model unmasked within that user's session, so an agent can act on
+# "Priya Patel" or "MRN-000900130" instead of searching for "[NAME_1]".
+# Values the user did not type, and every other identifier class (SSN,
+# Aadhaar, PAN, card, phone...), are masked as usual.
+SENDER_KEYS = frozenset(
+    k.strip() for k in os.getenv("SENDER_KEY_IDENTIFIERS", "full_name,email_address,medical_record_number").split(",") if k.strip()
+)
 
 
 def process(
@@ -90,16 +108,35 @@ def process(
     scored: bool = True,
     restore_to_sender: bool = False,
     visibility: Optional[Dict[str, str]] = None,
+    pass_sender_keys: bool = False,
 ) -> Result:
     hits = engine.planned_actions(db, text, pack_id)
+    # restore_to_sender on inbound text marks it as typed by the user themselves.
+    own = {
+        (n, s) for n, s, a in hits
+        if n in SENDER_KEYS and a != "block"
+        and ((restore_to_sender and direction == "inbound") or vault.is_sender_value(session_id, user_id, n, s))
+    }
+    if pass_sender_keys and direction == "inbound" and own:
+        kept = [s for _, s in own]
+        hits = [
+            (n, s, "sender_key") if (n, s) in own or (a != "block" and any(s != k and s in k for k in kept)) else (n, s, a)
+            for n, s, a in hits
+        ]
+    scored_violations = [n for n, s, a in hits if (n, s) not in own and a != "sender_key"]
+    if direction == "outbound" and not scored:
+        # Tool results are data the agent was authorised to read: mask the
+        # sensitive fields instead of dropping the whole result (a blocked
+        # patient record would break legitimate read-then-act workflows).
+        hits = [(n, s, "redact" if a == "block" else a) for n, s, a in hits]
     violations = [name for name, _, _ in hits]
     if not hits:
         # Nothing new detected -- but an outbound reply may still carry
         # placeholders ("Hello, [NAME_1]!") that must be restored for display.
         display, role_applied, _ = _display(db, text, pack_id, session_id, user_id, direction, restore_to_sender, visibility)
-        return Result("allow", text, display, [], [], role_applied)
+        return Result("allow", text, display, [], [], role_applied, [])
     if any(action == "block" for _, _, action in hits):
-        return Result("block", "", "", violations, [{"type": n, "action": "block"} for n, _, a in hits if a == "block"])
+        return Result("block", "", "", violations, [{"type": n, "action": "block"} for n, _, a in hits if a == "block"], False, violations)
 
     if direction == "inbound":
         origin = "sender" if restore_to_sender else "context"
@@ -111,6 +148,10 @@ def process(
     entities: List[dict] = []
     # Longest spans first so a value contained in another is not split.
     for identifier, span, action in sorted(hits, key=lambda h: -len(h[1])):
+        if action == "sender_key":
+            vault.token_for(session_id, identifier, span, "sender", user_id)  # remember it for later prompts
+            entities.append({"type": identifier, "action": "sender_key"})
+            continue
         policy = policy_for(db, pack_id, identifier)
         if policy.applies_to not in ("both", direction):
             action = "log_only"
@@ -138,7 +179,7 @@ def process(
         token = e.get("shown_to_model")
         if token in restored:
             e["restored"] = restored[token]
-    return Result(verdict, model_text, display_text, violations, entities, role_applied)
+    return Result(verdict, model_text, display_text, violations, entities, role_applied, scored_violations)
 
 
 def _display(db, model_text, pack_id, session_id, user_id, direction, restore_to_sender, visibility):

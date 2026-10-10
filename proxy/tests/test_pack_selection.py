@@ -87,7 +87,7 @@ def test_unknown_pack_is_rejected_not_silently_unscanned(proxy_client):
     resp = _post(proxy_client, f"SSN {SSN}", pack="dpd")
     assert resp.status_code == 400
     assert resp.json()["error"] == "unknown_compliance_pack"
-    assert sorted(resp.json()["supported"]) == ["dpdp", "hipaa"]
+    assert sorted(resp.json()["supported"]) == ["dpdp", "hipaa", "hipaa+dpdp"]
     assert proxy_client.upstream_requests == []
 
 

@@ -48,7 +48,7 @@ GOVERNANCE_API_URL = os.getenv("GOVERNANCE_API_URL", "http://localhost:8001")
 # governance_api, because the engine treats an unknown pack_id as "no
 # detectors" and allows everything -- a typo'd header would silently disable
 # scanning. Keep in sync with `_get_detector` in governance_api/compliance/engine.py.
-SUPPORTED_PACKS = frozenset({"hipaa", "dpdp"})
+SUPPORTED_PACKS = frozenset({"hipaa", "dpdp", "hipaa+dpdp"})
 DEFAULT_PACK = "hipaa"
 
 app = FastAPI(title="governance-proxy")

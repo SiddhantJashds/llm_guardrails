@@ -24,6 +24,7 @@ from access_control import roles
 from authority.engine import AuthorityEngine, DEFAULT_SCORE
 from shared.models import AgentTrustState
 from authority.policy_gates import required_threshold, DEFAULT_THRESHOLD
+from authority import tool_policy
 from compliance import engine as compliance_engine
 from compliance import redaction
 from receipts.writer import write_receipt
@@ -62,6 +63,7 @@ def compliance_check(req: ComplianceCheckRequest, db: Session = Depends(get_db))
         scored=req.apply_score,
         restore_to_sender=req.restore_to_sender,
         visibility=visibility,
+        pass_sender_keys=req.pass_sender_keys,
     )
     verdict, violations = result.verdict, result.violations
     # Inbound text goes to the model; outbound text goes to the person.
@@ -78,10 +80,11 @@ def compliance_check(req: ComplianceCheckRequest, db: Session = Depends(get_db))
 
     # apply_score=False (e.g. tool-result scans): redact + receipt, but leave
     # the score alone -- and don't even create trust state for it.
-    if (violations or injection_hits) and req.apply_score:
+    scored = result.scored_violations if result.scored_violations is not None else violations
+    if (scored or injection_hits) and req.apply_score:
         engine = AuthorityEngine(db)
         engine.get_or_create(req.identity.agent_id, req.identity.session_id, req.identity.parent_agent_id)
-        _apply_signals(engine, req.identity.agent_id, req.identity.session_id, violations, injection_hits)
+        _apply_signals(engine, req.identity.agent_id, req.identity.session_id, scored, injection_hits)
 
     reason = ", ".join(violations) if violations else None
     if violations and result.role_view_applied:
@@ -128,8 +131,15 @@ def tool_check(req: ToolCheckRequest, db: Session = Depends(get_db)):
     engine = AuthorityEngine(db)
     state = engine.get_or_create(req.identity.agent_id, req.identity.session_id, req.identity.parent_agent_id)
     threshold = required_threshold(db, req.tool_id)
-    allowed = state.current_score >= threshold
-    reason = None if allowed else f"score {state.current_score} below required {threshold} for '{req.tool_id}'"
+    # Gates in order (authority/tool_policy.py): declared scope, human
+    # approval, earned score, then the call's own arguments.
+    reason = (
+        tool_policy.scope_denial(req.tool_id, req.declared_tools)
+        or tool_policy.approval_denial(req.tool_id, threshold)
+        or (None if state.current_score >= threshold else f"score {state.current_score} below required {threshold} for '{req.tool_id}'")
+        or tool_policy.argument_denial(db, req.tool_id, req.tool_args, req.pack_id, req.identity.session_id)
+    )
+    allowed = reason is None
 
     receipt = write_receipt(
         db,

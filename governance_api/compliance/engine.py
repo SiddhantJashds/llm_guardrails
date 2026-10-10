@@ -45,7 +45,24 @@ def _get_detector(pack_id: str):
     if _DPDP_DETECTOR is None:
         from detectors.dpdp.identifiers import find_all as _dpdp_find_all
         _DPDP_DETECTOR = _dpdp_find_all
+    if pack_id == COMBINED_PACK:
+        return _combined
     return {"hipaa": _HIPAA_DETECTOR, "dpdp": _DPDP_DETECTOR}.get(pack_id)
+
+
+# Scan with HIPAA and DPDP at once: one text can hold an SSN and an Aadhaar
+# number, and the judging criterion is "checked as a HIPAA AND DPDP guardrail".
+COMBINED_PACK = "hipaa+dpdp"
+_STRICTNESS = {"block": 3, "hash": 2, "redact": 1, "log_only": 0}
+
+
+def _combined(text: str):
+    seen, merged = set(), []
+    for hit in _HIPAA_DETECTOR(text) + _DPDP_DETECTOR(text):
+        if hit not in seen:
+            seen.add(hit)
+            merged.append(hit)
+    return merged
 
 
 def _run_detectors(text: str, pack_id: str) -> List[Tuple[str, str]]:
@@ -57,6 +74,10 @@ def _run_detectors(text: str, pack_id: str) -> List[Tuple[str, str]]:
 
 
 def _action_for(db: Session, pack_id: str, identifier: str) -> str:
+    if pack_id == COMBINED_PACK:
+        # The stricter of the two packs' configured actions wins.
+        actions_found = [r.action for r in (db.get(CompliancePackConfig, (p, identifier)) for p in ("hipaa", "dpdp")) if r is not None]
+        return max(actions_found, key=lambda a: _STRICTNESS.get(a, 1)) if actions_found else "redact"
     row = db.get(CompliancePackConfig, (pack_id, identifier))
     return row.action if row is not None else "redact"  # fail toward the safer action
 

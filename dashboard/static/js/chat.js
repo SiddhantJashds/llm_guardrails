@@ -97,7 +97,7 @@ export function initChat(ctx) {
           <label for="chat-tool" data-for="tool">Tool</label>
           <span data-for="tool" class="chat__tool"><input class="input" id="chat-tool" list="chat-tools" value="send_email" /><datalist id="chat-tools"></datalist></span>
           <label for="chat-pack" data-for="pack">Compliance pack</label>
-          <select class="select" id="chat-pack" data-for="pack"><option value="hipaa">HIPAA</option><option value="dpdp">DPDP</option></select>
+          <select class="select" id="chat-pack" data-for="pack"><option value="hipaa+dpdp">HIPAA + DPDP</option><option value="hipaa">HIPAA</option><option value="dpdp">DPDP</option></select>
           <div data-for="restore_sender" style="grid-column:1 / -1;margin-top:4px"><label class="check"><input type="checkbox" id="chat-restore-sender" checked /> Show my own details in replies</label></div>
           <div data-for="request_unredacted" style="grid-column:1 / -1"><label class="check"><input type="checkbox" id="chat-request-unredacted" /> Request unredacted view (role permitting)</label></div>
         </div>

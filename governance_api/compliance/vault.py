@@ -53,7 +53,10 @@ def normalize(identifier: str, value: str) -> str:
     if identifier in ("phone_number", "fax_number"):
         digits = re.sub(r"\D", "", value)
         return digits[-10:] if len(digits) >= 10 else digits
-    return re.sub(r"\s+", " ", value).strip().casefold()
+    value = re.sub(r"\s+", " ", value).strip().casefold()
+    if identifier == "full_name":
+        value = re.sub(r"['’]s$", "", value)  # "Margaret Whitfield's" is Margaret Whitfield
+    return value
 
 
 @dataclass
@@ -113,6 +116,23 @@ def token_for(session_id: str, identifier: str, value: str, origin: str, user_id
         elif origin == "sender" and entry.origin != "sender":
             entry.origin, entry.user_id = "sender", user_id
         return entry.token
+
+
+def is_sender_value(session_id: str, user_id: str, identifier: str, value: str) -> bool:
+    """True if this user typed this value earlier in the session. A name also
+    matches a shorter form of a typed name ("Margaret" after "Margaret Whitfield")."""
+    key = normalize(identifier, value)
+    words = set(key.split())
+    with _lock:
+        s = _sessions.get(session_id)
+        if s is None:
+            return False
+        for (ident, norm), entry in s.by_value.items():
+            if entry.origin != "sender" or entry.user_id != user_id or ident != identifier:
+                continue
+            if norm == key or (identifier == "full_name" and words and words <= set(norm.split())):
+                return True
+    return False
 
 
 def lookup(session_id: str, token: str) -> Optional[Entry]:

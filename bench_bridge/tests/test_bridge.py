@@ -115,8 +115,8 @@ def test_delegation_cap_ignores_other_session_parent(bridge_client, gov_client):
     # Degrade the parent in sess_X only.
     parent_x = make_hook(agent_id="orchestrator", parent_agent_id=None, session_id="sess_X")
     bridge_client.post(
-        "/api/v1/on_prompt_received", json={**parent_x, "prompt": "mail me at alice@example.com"}
-    ).json()  # -20 -> 80
+        "/api/v1/on_prompt_received", json={**parent_x, "prompt": "SSN 123-45-6789"}
+    ).json()  # -20 -> 80 (the user's own email would be a lookup key, not a penalty)
 
     child_x = make_hook(agent_id="data_agent", session_id="sess_X")
     assert _tool_score(gov_client, child_x)["current_score"] == 80.0  # capped by same-session parent
@@ -192,3 +192,32 @@ def test_live_feed_cors_allows_dashboard_reads_only(bridge_client):
     assert ok.headers.get("access-control-allow-origin") == "http://localhost:8081"
     pre = bridge_client.options("/api/v1/on_tool_call", headers={"Origin": "http://localhost:8081", "Access-Control-Request-Method": "POST"})
     assert pre.status_code == 400
+
+
+def test_out_of_scope_tool_is_denied_by_governance_with_a_receipt(bridge_client, gov_client):
+    base = make_hook(session_id="sess_scope")
+    resp = bridge_client.post("/api/v1/on_tool_call", json={**base, "tool_name": "delete_file", "tool_args": {"filename": "x"},
+                                                           "tool_risk": "high", "agent_allowed_tools": ["read_database"]})
+    assert resp.json() == {"allow": False}
+    ledger = gov_client.get("/dashboard/ledger", params={"session_id": "sess_scope"}).json()
+    assert ledger["total"] == 1 and "declared tools" in ledger["items"][0]["reason"]
+
+
+def test_consent_sync_reads_non_consented_people_from_the_host_db(bridge_client, gov_client, tmp_path, monkeypatch):
+    import sqlite3
+
+    db = tmp_path / "patients.db"
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE patients (name TEXT, email TEXT, consent_status TEXT, consent_purpose TEXT)")
+    conn.executemany("INSERT INTO patients VALUES (?,?,?,?)", [
+        ("Priya Patel", "priya.patel@example.com", "WITHDRAWN", ""),
+        ("Margaret Whitfield", "margaret.whitfield@example.com", "GIVEN", "treatment"),
+    ])
+    conn.commit()
+    conn.close()
+    module = bridge_client.module
+    monkeypatch.setattr(module, "CONSENT_DB", str(db))
+    monkeypatch.setattr(module.httpx, "put", lambda url, json, timeout: gov_client.put(url.replace(module.GOVERNANCE_API_URL, ""), json=json))
+    module._sync_consent()
+    subjects = {c["subject"]: c["status"] for c in gov_client.get("/admin/consent").json()}
+    assert subjects == {"priya.patel@example.com": "WITHDRAWN", "priya patel": "WITHDRAWN"}

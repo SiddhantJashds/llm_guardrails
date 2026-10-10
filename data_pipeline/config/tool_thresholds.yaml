@@ -7,4 +7,9 @@ thresholds:
   drive_read_tool: 50.0
   drive_write_tool: 80.0
   email_send_tool: 90.0
+  # Above 100 = can never be earned by score: always needs human approval
+  # (governance_api/authority/tool_policy.py).
+  delete_file: 101.0
+  update_record: 101.0
+  submit_claim: 101.0
 default_threshold: 60.0

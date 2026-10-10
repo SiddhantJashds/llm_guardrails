@@ -27,7 +27,8 @@ import logging
 import os
 import sys
 import time
-from collections import deque
+import threading
+from collections import OrderedDict, deque
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -44,7 +45,11 @@ from data_pipeline.ingestion.token_usage_pipeline import ingest_event  # noqa: E
 log = logging.getLogger("bench_bridge")
 
 GOVERNANCE_API_URL = os.getenv("GOVERNANCE_API_URL", "http://localhost:8001")
-PACK_ID = os.getenv("BRIDGE_PACK_ID", "hipaa")
+# Both packs at once: the full bench mixes HIPAA (SSN, MRN, dates) and DPDP
+# (Aadhaar, PAN, UPI) data, often in the same document.
+PACK_ID = os.getenv("BRIDGE_PACK_ID", "hipaa+dpdp")
+# Host-app records the bridge reads consent from (DPDP); missing file = no sync.
+CONSENT_DB = os.getenv("BRIDGE_CONSENT_DB", str(Path(__file__).resolve().parents[2] / "GuardRailBench-Sample" / "fake_data" / "patients.db"))
 TIMEOUT = float(os.getenv("BRIDGE_TIMEOUT", "1.5"))
 
 gov = GovernanceClient(base_url=GOVERNANCE_API_URL, timeout=TIMEOUT)
@@ -60,13 +65,14 @@ BENCH_TOOL_THRESHOLDS = {
     "search_patients": 50.0,       # low
     "list_patients": 50.0,         # low
     "read_database": 60.0,         # medium
-    "update_record": 60.0,         # medium
     "get_insurance_info": 60.0,    # medium
     "schedule_appointment": 60.0,  # medium
-    "delete_file": 80.0,           # high
     "send_email": 80.0,            # high
-    "submit_claim": 80.0,          # high
 }
+# Destructive / irreversible: a threshold above 100 can never be earned, so
+# these always need a human (tool_policy.approval_denial). Enforced on every
+# start, unlike the seed-if-absent thresholds above.
+APPROVAL_REQUIRED = {"delete_file": 101.0, "update_record": 101.0, "submit_claim": 101.0}
 
 app = FastAPI(title="bench-bridge")
 
@@ -170,10 +176,10 @@ def _seed_thresholds(retries: int = 5, delay_s: float = 2.0) -> None:
     if existing is None:
         log.warning("threshold seed skipped, admin API unreachable")
         return
-    have = {t["tool_id"] for t in existing}
-    for tool_id, threshold in BENCH_TOOL_THRESHOLDS.items():
-        if tool_id in have:
-            continue
+    have = {t["tool_id"]: t["threshold"] for t in existing}
+    todo = {k: v for k, v in BENCH_TOOL_THRESHOLDS.items() if k not in have}
+    todo.update({k: v for k, v in APPROVAL_REQUIRED.items() if have.get(k, 0) <= 100})
+    for tool_id, threshold in todo.items():
         try:
             httpx.put(
                 f"{GOVERNANCE_API_URL}/admin/tool-thresholds/{tool_id}",
@@ -185,9 +191,40 @@ def _seed_thresholds(retries: int = 5, delay_s: float = 2.0) -> None:
             log.warning("could not seed threshold %s: %s", tool_id, exc)
 
 
+def _sync_consent() -> None:
+    """Push the host app's non-consented data principals into governance's
+    consent registry, keyed by email and by name (DPDP)."""
+    import sqlite3
+
+    if not os.path.exists(CONSENT_DB):
+        log.info("consent sync skipped: %s not found", CONSENT_DB)
+        return
+    try:
+        conn = sqlite3.connect(f"file:{CONSENT_DB}?mode=ro", uri=True)
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(patients)")}
+        if not {"name", "email", "consent_status"} <= cols:
+            return
+        purpose = "consent_purpose" if "consent_purpose" in cols else "''"
+        mrn = "mrn" if "mrn" in cols else "''"
+        rows = conn.execute(f"SELECT name, email, consent_status, {purpose}, {mrn} FROM patients WHERE upper(consent_status) != 'GIVEN'").fetchall()
+        conn.close()
+    except sqlite3.Error as exc:
+        log.warning("consent sync failed: %s", exc)
+        return
+    for name, email, status, purpose_value, mrn_value in rows:
+        for subject in filter(None, (email, name, mrn_value)):
+            try:
+                httpx.put(f"{GOVERNANCE_API_URL}/admin/consent/{subject}", json={"status": status, "label": name, "purpose": purpose_value, "source": "GuardRailBench patients"}, timeout=TIMEOUT)
+            except httpx.HTTPError as exc:
+                log.warning("could not sync consent for %s: %s", name, exc)
+                return
+    log.info("synced consent for %d data principals", len(rows))
+
+
 @app.on_event("startup")
 def on_startup() -> None:
     _seed_thresholds()
+    _sync_consent()
 
 
 @app.get("/healthz")
@@ -202,9 +239,31 @@ def live_events(after: int = Query(0, ge=0), limit: int = Query(500, ge=1, le=20
     return {"events": events, "last_seq": last, "bridge_started_at": STARTED_AT}
 
 
+_seen_sessions: "OrderedDict[str, None]" = OrderedDict()
+_seen_lock = threading.Lock()
+
+
+def _is_user_message(req) -> bool:
+    """The first prompt of a session from a root agent is the end user's own
+    message (later root prompts carry sub-agent replies)."""
+    if req.parent_agent_id:
+        return False
+    with _seen_lock:
+        if req.session_id in _seen_sessions:
+            return False
+        _seen_sessions[req.session_id] = None
+        while len(_seen_sessions) > 10_000:
+            _seen_sessions.popitem(last=False)
+        return True
+
+
 @app.post("/api/v1/on_prompt_received")
 def on_prompt_received(req: PromptHook):
-    res = gov.check_compliance(_identity(req), req.prompt, "inbound", PACK_ID)
+    # A name / email / MRN the user typed is the key the agents need to find
+    # the record; it passes through for this session only, every other
+    # identifier (and anything the user did not type) is masked.
+    res = gov.check_compliance(_identity(req), req.prompt, "inbound", PACK_ID,
+                               restore_to_sender=_is_user_message(req), pass_sender_keys=True)
     cleaned = res.get("cleaned_text") or ""
     _record("on_prompt_received", req, _verdict(res), cleaned or res.get("reason"))
     return {"prompt": cleaned}
@@ -228,11 +287,9 @@ def on_completion_received(req: CompletionHook):
 
 @app.post("/api/v1/on_tool_call")
 def on_tool_call(req: ToolCallHook):
-    if req.tool_name not in (req.agent_allowed_tools or []):
-        log.info("out-of-scope deny: agent=%s tool=%s", req.agent_id, req.tool_name)
-        _record("on_tool_call", req, "deny", f"{req.tool_name} is not in this agent's allowed tools", tool=req.tool_name)
-        return {"allow": False}
-    res = gov.check_tool(_identity(req), req.tool_name)
+    # Every call goes through governance -- scope, approval, score and the
+    # call's arguments -- so each decision, deny included, gets a receipt.
+    res = gov.check_tool(_identity(req), req.tool_name, tool_args=req.tool_args, declared_tools=req.agent_allowed_tools or [])
     allowed = bool(res.get("allowed", False))
     detail = res.get("reason") or (f"score {res.get('current_score')} against threshold {res.get('required_threshold')}" if "current_score" in res else None)
     _record("on_tool_call", req, "allow" if allowed else "deny", detail, tool=req.tool_name)

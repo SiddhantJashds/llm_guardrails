@@ -7,6 +7,7 @@ Every detector is a pure function: (text) -> list of matched spans. No LLM
 call, no self-attestation -- compliance decisions must be reproducible and
 tamper-proof (docs/HACKATHON_PLAN.md hardening #1).
 """
+from detectors.extended import find_extended
 import re
 from typing import Any, List, Tuple
 
@@ -152,6 +153,8 @@ def find_all(text: str) -> List[Tuple[str, str]]:
         for match in pattern.finditer(text):
             violations.append((name, match.group(0)))
     violations.extend(_find_zip_code(text))
+    # Payment, device, document and record IDs shared by both packs (detectors/extended.py).
+    violations.extend(find_extended(text))
     violations.extend(ner.find_names(text))
     violations.extend(ner.find_locations(text))
     return violations

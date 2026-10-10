@@ -161,3 +161,22 @@ class UserRole(Base):
     user_id = Column(String, primary_key=True)
     role_id = Column(String, nullable=False)
     updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+
+
+class ConsentRecord(Base):
+    """Data-principal consent known to governance (DPDP). `subject` is a
+    lower-cased email address or full name. Absence means no restriction;
+    any status other than GIVEN makes tool calls that target the subject
+    (e.g. send_email to them) be denied. Synced from the host application
+    (bench_bridge does this from the GuardRailBench records) or set via
+    /admin/consent."""
+
+    __tablename__ = "consent_records"
+
+    subject = Column(String, primary_key=True)
+    label = Column(String, nullable=True)
+    status = Column(String, nullable=False)  # GIVEN | WITHDRAWN | EXPIRED | GUARDIAN_PENDING ...
+    purpose = Column(String, nullable=True)
+    source = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)

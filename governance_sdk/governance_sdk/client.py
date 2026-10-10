@@ -47,16 +47,24 @@ class GovernanceClient:
             # the httpx.HTTPError real network calls produce.
             return {"allowed": False, "verdict": "deny", "reason": f"governance_api_unreachable: {exc}"}
 
-    def check_tool(self, identity: dict, tool_id: str) -> dict:
-        return self._post("/governance/tool-check", {"identity": identity, "tool_id": tool_id})
+    def check_tool(self, identity: dict, tool_id: str, tool_args: dict = None, declared_tools: list = None) -> dict:
+        payload = {"identity": identity, "tool_id": tool_id}
+        if tool_args is not None:
+            payload["tool_args"] = tool_args  # recipient / consent / identifier checks
+        if declared_tools is not None:
+            payload["declared_tools"] = list(declared_tools)  # out-of-scope calls are denied
+        return self._post("/governance/tool-check", payload)
 
     def check_compliance(
-        self, identity: dict, text: str, direction: str, pack_id: str = "hipaa", apply_score: bool = True
+        self, identity: dict, text: str, direction: str, pack_id: str = "hipaa", apply_score: bool = True,
+        restore_to_sender: bool = None, pass_sender_keys: bool = None,
     ) -> dict:
-        return self._post(
-            "/governance/compliance-check",
-            {"identity": identity, "text": text, "direction": direction, "pack_id": pack_id, "apply_score": apply_score},
-        )
+        payload = {"identity": identity, "text": text, "direction": direction, "pack_id": pack_id, "apply_score": apply_score}
+        if restore_to_sender is not None:
+            payload["restore_to_sender"] = restore_to_sender  # this text was typed by the end user
+        if pass_sender_keys is not None:
+            payload["pass_sender_keys"] = pass_sender_keys  # their own name/email/MRN reach the model
+        return self._post("/governance/compliance-check", payload)
 
     def check_handoff(self, identity: dict, output_text: str, pack_id: str = "hipaa") -> dict:
         return self._post(

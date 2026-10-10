@@ -17,6 +17,9 @@ class IdentityEnvelopeSchema(BaseModel):
 
 class ComplianceCheckRequest(BaseModel):
     identity: IdentityEnvelopeSchema
+    # Let names/emails/MRNs the user typed in this session through to the
+    # model (compliance/redaction.py SENDER_KEYS). Trusted callers only.
+    pass_sender_keys: bool = False
     direction: Literal["inbound", "outbound"]
     text: str
     pack_id: str = "hipaa"
@@ -59,6 +62,12 @@ class ComplianceCheckResponse(BaseModel):
 class ToolCheckRequest(BaseModel):
     identity: IdentityEnvelopeSchema
     tool_id: str
+    # Optional, additive (governance_api/authority/tool_policy.py): the call's
+    # arguments (recipient domain, consent and identifier checks) and the
+    # tools the agent declared it may use (out-of-scope calls are denied).
+    tool_args: Optional[dict] = None
+    declared_tools: Optional[List[str]] = None
+    pack_id: str = "hipaa+dpdp"
 
 
 class ToolCheckResponse(BaseModel):

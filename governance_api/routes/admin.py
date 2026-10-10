@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # allow `import shared`
 from shared.db import get_db  # noqa: E402
-from shared.models import AgentTrustState, CompliancePackConfig, RedactionRole, Receipt, TokenUsageEvent, UserProfile, UserRole  # noqa: E402
+from shared.models import AgentTrustState, CompliancePackConfig, ConsentRecord, RedactionRole, Receipt, TokenUsageEvent, UserProfile, UserRole  # noqa: E402
 from access_control import roles as roles_mod  # noqa: E402
 from compliance import redaction, vault  # noqa: E402
 
@@ -229,3 +229,46 @@ def put_user_role(user_id: str, body: UserRoleUpdate, db: Session = Depends(get_
     row.role_id = body.role_id
     db.commit()
     return {"user_id": user_id, "role_id": row.role_id}
+
+
+
+# ---------------------------------------------------------------------------
+# Consent registry (DPDP): subjects whose consent is not GIVEN cannot be the
+# target of a tool call (authority/tool_policy.py).
+# ---------------------------------------------------------------------------
+
+class ConsentUpdate(BaseModel):
+    status: str
+    label: Optional[str] = None
+    purpose: Optional[str] = None
+    source: Optional[str] = None
+
+
+@router.get("/consent")
+def list_consent(db: Session = Depends(get_db)):
+    return [
+        {"subject": r.subject, "label": r.label, "status": r.status, "purpose": r.purpose, "source": r.source}
+        for r in db.query(ConsentRecord).order_by(ConsentRecord.subject).all()
+    ]
+
+
+@router.put("/consent/{subject}")
+def put_consent(subject: str, body: ConsentUpdate, db: Session = Depends(get_db)):
+    key = subject.strip().lower()
+    row = db.get(ConsentRecord, key)
+    if row is None:
+        row = ConsentRecord(subject=key, status=body.status.upper())
+        db.add(row)
+    row.status, row.label, row.purpose, row.source = body.status.upper(), body.label, body.purpose, body.source
+    db.commit()
+    return {"subject": key, "status": row.status}
+
+
+@router.delete("/consent/{subject}")
+def delete_consent(subject: str, db: Session = Depends(get_db)):
+    row = db.get(ConsentRecord, subject.strip().lower())
+    if row is None:
+        raise HTTPException(status_code=404, detail="No consent record for that subject.")
+    db.delete(row)
+    db.commit()
+    return {"deleted": subject}

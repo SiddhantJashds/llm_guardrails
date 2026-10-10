@@ -64,6 +64,12 @@ db.sqlite3-journal
 # This project's runtime/test SQLite files (shared/db.py default, governance_api/tests/conftest.py)
 *.db
 *.db-journal
+# SQLite write-ahead files: committing them corrupts every teammate's local
+# governance.db on pull (SQLite replays a foreign WAL into it).
+*.db-wal
+*.db-shm
+# Backups of a corrupted local database (see DEVELOPER_GUIDE troubleshooting)
+governance.db.corrupt-*
 
 # Flask stuff:
 instance/
